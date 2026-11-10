@@ -50,3 +50,7 @@ runtime/SimpleGraphic/Screenshots
 
 .emmyrc.json
 .luarc.json
+
+# Local font/dll backups
+*.authentic-bak
+*.before-*
