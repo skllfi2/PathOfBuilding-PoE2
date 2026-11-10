@@ -8,19 +8,11 @@
 
 ### PathOfBuilding-PoE2
 
-- Branch: `dev` @ bb52d6b36.
-- Основной код приложения.
-- Обновлено 2026-11-09 (пакет 7 + Window State): UI-кастомизация (Font Preset,
-  Accent Color) и сохранение геометрии окна — **НЕ закоммичено**: 15 изменённых
-  файлов (ButtonControl, CalcSectionControl, CheckBoxControl, DropDownControl,
-  EditControl, ListControl, PopupDialog, ScrollBarControl, SectionControl,
-  SliderControl, Tooltip, Build.lua, Main.lua, _SimpleGraphic.def.lua,
-  `runtime/SimpleGraphic.dll` + 6 legacy .tgf
-  Fonts) + untracked `src/Modules/ThemeFluent.lua`,
-  `src/Modules/UIFont.lua`, `src/Modules/WindowState.lua` +
-  `runtime/SimpleGraphic.dll.before-indexedcolor-20261109` +
-  `runtime/SimpleGraphic.dll.before-windowstate-20261109` +
-  notosanssc-{regular,semibold}.ttf.
+- Branch: `dev` @ `3f37144d5`.
+- Основной код приложения. Рабочее дерево чистое (clean).
+- Все наработки пакетов D-017..D-021 успешно зафиксированы в ветке:
+  - `80344dd88`: `docs: workspace agent instructions, architectural decisions and dev tooling`
+  - `3f37144d5`: `feat(ui): Fluent design tokens, font presets, window state and side-by-side item comparison` (D-017..D-021, 27 файлов).
 - Пакет 7 (2026-11-09): выбор шрифта (`UIFont.lua`, 6 слотов, подмена `.tgf`
   + рестарт) и выбор акцента (`ThemeFluent.lua`, shared-singleton, 4 палитры);
   DropDown-ы «UI Font» / «Accent Color» в Options; `uiFont`/`uiAccent` в
@@ -221,13 +213,12 @@ CurrencyNames отдельного парсера нет — RU-валюты п�
 
 ### PathOfBuilding-SimpleGraphic-Next
 
-- Branch: `feat/modern-runtime` (отдельный Git-root, НЕ тот же репозиторий, что
+- Branch: `feat/modern-runtime` @ `ce32002` (отдельный Git-root, НЕ тот же репозиторий, что
   `PathOfBuilding-SimpleGraphic` выше).
-- Обновлено 2026-11-08: реализованы (НЕ закоммичены, 6 файлов, +493/−2):
-  fallback-цепочка гарнитур из массива `fonts` в `UnicodeFallback.tgf`
-  (FrizQuadrataITC → SegoeUI → NotoSansCJK, faces шарятся через кэш),
-  SDF-рендер скруглённых прямоугольников (radius ≤16px, рамка, drop shadow)
-  и Lua API `DrawControlBox`. Детали и обоснования — D-012 в DECISIONS.md.
+- Рабочее дерево чистое (clean).
+- Все наработки зафиксированы коммитом `ce32002`:
+  `feat(engine): DrawControlBox SDF rendering, font fallback chain, SetIndexedColor and window geometry APIs` (11 файлов: DrawControlBox SDF, fallback-цепочка UnicodeFallback.tgf, SetIndexedColor, Get/SetWindowPos/Size/Maximized/GetMonitorBounds, .gitignore).
+- Детали и обоснования — D-012, D-014, D-016, D-018 в DECISIONS.md.
 - Обновлено 2026-11-09 (Win11-натив, НЕ закоммичено; поверх коммита владельца
   `a926ea5` «feat(winui3): Mica + immersive dark titlebar» от 2026-11-07):
   8 файлов modified — к набору D-012 добавлены `engine/system/sys_video.h` и

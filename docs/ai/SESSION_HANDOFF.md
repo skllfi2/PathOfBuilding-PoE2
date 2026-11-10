@@ -899,3 +899,23 @@ batch4 50/50, batch5 40/40.
   колец и оружия; рендер глифов ▲/▼ (U+25B2/U+25BC) во FONTIN SC/Noto.
 - Nowledge Mem: D-020 сохранена в Space `pob2fork` (memory `44e10386`); встроенные nowledge_mem-инструменты OpenCode в этой сессии падали («nmem CLI not found»), запись сделана напрямую через CLI `nmem` (см. D-019).
 - Решения — DECISIONS.md D-020.
+
+## 15. Фиксация наработок в Git (Коммиты D-017..D-021, 2026-11-11)
+
+### Что сделано
+По прямому решению владельца все накопленные и проверенные изменения зафиксированы в Git:
+
+1. **`PathOfBuilding-SimpleGraphic-Next` (ветка `feat/modern-runtime`):**
+   - Коммит `ce32002`: `feat(engine): DrawControlBox SDF rendering, font fallback chain, SetIndexedColor and window geometry APIs`
+   - Зафиксированы 11 файлов: SDF скругления/тени `DrawControlBox`, fallback-цепочка гарнитур, мутабельный `colorEscape[10][3]` (`SetIndexedColor`), API геометрии окна (`Get/SetWindowPos`, `Get/SetWindowSize`, `Is/SetWindowMaximized`, `GetMonitorBounds`), `.gitignore` (`/runtime/`).
+   - Рабочее дерево: clean.
+
+2. **`PathOfBuilding-PoE2` (ветка `dev`):**
+   - Коммит `80344dd88`: `docs: workspace agent instructions, architectural decisions and dev tooling` (AGENTS.md, CLAUDE.md, GEMINI.md, docs/ai/*, tools/pob2.ps1, .gitignore с правилами игнорирования локальных бэкапов).
+   - Коммит `3f37144d5`: `feat(ui): Fluent design tokens, font presets, window state and side-by-side item comparison` (27 файлов: D-017 Fluent тема/акценты/шрифты, D-018 геометрия окна, D-019 quick-import Ctrl+V, D-020 compact tooltips/auto-compare, D-021 side-by-side сравнение, Noto шрифты и DLL).
+   - Рабочее дерево: clean.
+
+3. **Верификация:**
+   - Интеграционный харнесс `harness_batch11_sidebyside.lua` — **100/100 PASS**.
+   - Регрессионные харнессы: batch 7..10 — **все PASS**.
+   - Документация синхронизирована.
