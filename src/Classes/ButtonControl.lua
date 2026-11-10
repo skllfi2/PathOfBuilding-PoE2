@@ -4,6 +4,10 @@
 -- Basic button control.
 --
 ---@class ButtonControl: Control, TooltipHost
+local unpack = unpack
+
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 local ButtonClass = newClass("ButtonControl", "Control", "TooltipHost")
 
 function ButtonClass:ButtonControl(anchor, rect, label, onClick, onHover, forceTooltip)
@@ -44,24 +48,52 @@ function ButtonClass:Draw(viewPort, noTooltip)
 	local enabled = self:IsEnabled()
 	local mOver = self:IsMouseOver()
 	local locked = self:GetProperty("locked")
-	if not enabled then
-		SetDrawColor(0.33, 0.33, 0.33)
-	elseif mOver or locked then
-		SetDrawColor(1, 1, 1)
+	local textCol
+	if DrawControlBox then
+		-- WinUI 3 Fluent style: rounded button with a border and a soft shadow
+		local tokens = ThemeFluent.button
+		local bg, border
+		if not enabled then
+			bg, border = tokens.bgDisabled, tokens.borderDisabled
+		elseif self.clicked and mOver then
+			bg, border = tokens.bgPressed, tokens.borderPressed
+		elseif mOver then
+			bg, border = tokens.bgHover, tokens.borderHover
+		elseif locked then
+			-- Active mode button (e.g. the current view tab): elevated fill with
+			-- a Windows 11 segmented-control style accent indicator underneath
+			bg, border = tokens.bgActive, tokens.border
+		else
+			bg, border = tokens.bg, tokens.border
+		end
+		DrawControlBox(x, y, width, height, tokens.radius, bg, border, tokens.borderWidth, tokens.shadowBlur)
+		if enabled and locked then
+			SetDrawColor(unpack(tokens.indicator))
+			DrawImage(nil, x + tokens.indicatorInset, y + height - tokens.indicatorHeight - 1, width - tokens.indicatorInset * 2, tokens.indicatorHeight)
+		end
+		textCol = enabled and tokens.text or tokens.textDisabled
 	else
-		SetDrawColor(0.5, 0.5, 0.5)
+		-- Legacy SimpleGraphic rendering (runtime without DrawControlBox)
+		if not enabled then
+			SetDrawColor(0.33, 0.33, 0.33)
+		elseif mOver or locked then
+			SetDrawColor(1, 1, 1)
+		else
+			SetDrawColor(0.5, 0.5, 0.5)
+		end
+		DrawImage(nil, x, y, width, height)
+		if not enabled then
+			SetDrawColor(0, 0, 0)
+		elseif self.clicked and mOver then
+			SetDrawColor(0.5, 0.5, 0.5)
+		elseif mOver or locked then
+			SetDrawColor(0.33, 0.33, 0.33)
+		else
+			SetDrawColor(0, 0, 0)
+		end
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
+		textCol = enabled and { 1, 1, 1, 1 } or { 0.33, 0.33, 0.33, 1 }
 	end
-	DrawImage(nil, x, y, width, height)
-	if not enabled then
-		SetDrawColor(0, 0, 0)
-	elseif self.clicked and mOver then
-		SetDrawColor(0.5, 0.5, 0.5)
-	elseif mOver or locked then
-		SetDrawColor(0.33, 0.33, 0.33)
-	else
-		SetDrawColor(0, 0, 0)
-	end
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	if self.image then
 		if enabled then
 			SetDrawColor(1, 1, 1)
@@ -74,11 +106,8 @@ function ButtonClass:Draw(viewPort, noTooltip)
 			DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 		end
 	end
-	if enabled then
-		SetDrawColor(1, 1, 1)
-	else
-		SetDrawColor(0.33, 0.33, 0.33)
-	end
+	-- Restore the label color (the image block above changes the draw color)
+	SetDrawColor(unpack(textCol))
 	local label = self:GetProperty("label")
 	if label == "+" then
 		DrawImage(nil, x + width * 0.2, y + height * 0.45, width * 0.6, height * 0.1)

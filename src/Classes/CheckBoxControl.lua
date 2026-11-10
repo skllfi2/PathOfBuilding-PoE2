@@ -4,6 +4,8 @@
 -- Basic check box control.
 --
 ---@class CheckBoxControl: Control, TooltipHost
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 local CheckBoxClass = newClass("CheckBoxControl", "Control", "TooltipHost")
 
 function CheckBoxClass:CheckBoxControl(anchor, rect, label, changeFunc, tooltipText, initialState)
@@ -42,29 +44,62 @@ function CheckBoxClass:Draw(viewPort, noTooltip)
 	local size = self.width
 	local enabled = self:IsEnabled()
 	local mOver = self:IsMouseOver()
-	if not enabled then
-		SetDrawColor(0.33, 0.33, 0.33)
-	elseif mOver then
-		SetDrawColor(1, 1, 1)
-	elseif self.borderFunc then
-		local r, g, b = self.borderFunc()
-		SetDrawColor(r, g, b)
-	elseif self.checkImage and self.state then
-		SetDrawColor(0.75, 0.75, 0.75)
+	local checkCol
+	if DrawControlBox then
+		-- WinUI 3 Fluent style: rounded check box, gold fill when checked
+		local tokens = ThemeFluent.checkbox
+		local bg, border
+		if not enabled then
+			bg, border = tokens.bgDisabled, tokens.borderDisabled
+		elseif self.state then
+			-- Checked: accent gold fill with a matching border ring
+			if self.clicked and mOver then
+				bg, border = tokens.bgCheckedPressed, tokens.bgCheckedPressed
+			elseif mOver then
+				bg, border = tokens.bgCheckedHover, tokens.bgCheckedHover
+			else
+				bg, border = tokens.bgChecked, tokens.bgChecked
+			end
+			checkCol = tokens.check
+		elseif self.borderFunc then
+			-- Validation border keeps priority over the hover border
+			local r, g, b = self.borderFunc()
+			bg, border = tokens.bgUnchecked, { r, g, b, 1 }
+		elseif mOver then
+			bg, border = tokens.bgUnchecked, tokens.borderHover
+		else
+			bg, border = tokens.bgUnchecked, tokens.border
+		end
+		DrawControlBox(x, y, size, size, tokens.radius, bg, border, tokens.borderWidth, tokens.shadowBlur)
+		if not enabled then
+			checkCol = self.state and ThemeFluent.colors.textDisabled or nil
+		end
 	else
-		SetDrawColor(0.5, 0.5, 0.5)
+		-- Legacy SimpleGraphic rendering (runtime without DrawControlBox)
+		if not enabled then
+			SetDrawColor(0.33, 0.33, 0.33)
+		elseif mOver then
+			SetDrawColor(1, 1, 1)
+		elseif self.borderFunc then
+			local r, g, b = self.borderFunc()
+			SetDrawColor(r, g, b)
+		elseif self.checkImage and self.state then
+			SetDrawColor(0.75, 0.75, 0.75)
+		else
+			SetDrawColor(0.5, 0.5, 0.5)
+		end
+		DrawImage(nil, x, y, size, size)
+		if not enabled then
+			SetDrawColor(0, 0, 0)
+		elseif self.clicked and mOver then
+			SetDrawColor(0.5, 0.5, 0.5)
+		elseif mOver then
+			SetDrawColor(0.33, 0.33, 0.33)
+		else
+			SetDrawColor(0, 0, 0)
+		end
+		DrawImage(nil, x + 1, y + 1, size - 2, size - 2)
 	end
-	DrawImage(nil, x, y, size, size)
-	if not enabled then
-		SetDrawColor(0, 0, 0)
-	elseif self.clicked and mOver then
-		SetDrawColor(0.5, 0.5, 0.5)
-	elseif mOver then
-		SetDrawColor(0.33, 0.33, 0.33)
-	else
-		SetDrawColor(0, 0, 0)
-	end
-	DrawImage(nil, x + 1, y + 1, size - 2, size - 2)
 	if self.checkImage then
 		if self.state then
 			if not enabled then
@@ -80,20 +115,36 @@ function CheckBoxClass:Draw(viewPort, noTooltip)
 		DrawImage(self.checkImage.handle, x + 1, y + 1, size - 2, size - 2, unpack(self.checkImage))
 	else
 		if self.state then
-			if not enabled then
-				SetDrawColor(0.33, 0.33, 0.33)
-			elseif mOver then
-				SetDrawColor(1, 1, 1)
+			if DrawControlBox then
+				-- Contrast check mark on the gold fill
+				if checkCol then
+					SetDrawColor(unpack(checkCol))
+				end
 			else
-				SetDrawColor(0.75, 0.75, 0.75)
+				if not enabled then
+					SetDrawColor(0.33, 0.33, 0.33)
+				elseif mOver then
+					SetDrawColor(1, 1, 1)
+				else
+					SetDrawColor(0.75, 0.75, 0.75)
+				end
 			end
 			main:DrawCheckMark(x + size/2, y + size/2, size * 0.8)
 		end
 	end
 	if enabled then
-		SetDrawColor(1, 1, 1)
+		if DrawControlBox then
+			-- Fluent: label follows the palette text tokens
+			SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+		else
+			SetDrawColor(1, 1, 1)
+		end
 	else
-		SetDrawColor(0.33, 0.33, 0.33)
+		if DrawControlBox then
+			SetDrawColor(unpack(ThemeFluent.colors.textDisabled))
+		else
+			SetDrawColor(0.33, 0.33, 0.33)
+		end
 	end
 	local label = self:GetProperty("label")
 	if label then

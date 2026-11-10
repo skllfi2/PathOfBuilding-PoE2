@@ -35,6 +35,11 @@ function buildMode:Init(dbFileName, buildName, buildXML, convertBuild, importLin
 	self.dbFileName = dbFileName
 	self.buildName = buildName
 	self.importLink = importLink
+	-- Pick up the deferred code from Quick-Import (Clipboard), set by BuildList before the mode switch
+	if main.pendingClipboardImport then
+		self.pendingClipboardImport = main.pendingClipboardImport
+		main.pendingClipboardImport = nil
+	end
 	if dbFileName then
 		self.dbFileSubPath = self.dbFileName:sub(#main.buildPath + 1, -#self.buildName - 5)
 	else
@@ -1291,6 +1296,15 @@ function buildMode:OnFrame(inputEvents)
 
 	if self.abortSave and not launch.devMode then
 		self:CloseBuild()
+	end
+
+	-- Quick-import: apply the code from the clipboard if it was passed during Init
+	if self.pendingClipboardImport and self.importTab then
+		local code = self.pendingClipboardImport
+		self.pendingClipboardImport = nil
+		self.viewMode = "IMPORT"
+		self.importTab:SelectControl(self.importTab.controls.importCodeIn)
+		self.importTab.controls.importCodeIn:SetText(code, true)
 	end
 
 	for id, event in ipairs(inputEvents) do
@@ -2582,10 +2596,27 @@ function buildMode:RefreshStatList()
 	self:EstimatePlayerProgress()
 end
 
-function buildMode:CompareStatList(tooltip, statList, actor, baseOutput, compareOutput, header, nodeCount)
+-- Compact stat-diff view: only these key labels are shown in compact tooltips.
+-- compact=true is passed from AddStatComparesToTooltip (items and passive tree),
+-- so they follow the Compact Item Tooltips option; other CompareStatList users
+-- omit the flag and keep the full diff
+local COMPACT_KEY_STAT_LABELS = {
+	["Full DPS"] = true,
+	["Combined DPS"] = true,
+	["Total Life"] = true,
+	["Energy Shield"] = true,
+	["Effective Hit Pool"] = true,
+	["Fire Resistance"] = true,
+	["Cold Resistance"] = true,
+	["Lightning Resistance"] = true,
+	["Chaos Resistance"] = true,
+}
+
+function buildMode:CompareStatList(tooltip, statList, actor, baseOutput, compareOutput, header, nodeCount, compact)
 	local count = 0
 	for _, statData in ipairs(statList) do
-		if statData.stat and (not statData.flag or actor.mainSkill.activeEffect.statSet.skillFlags[statData.flag]) and not statData.childStat and statData.stat ~= "SkillDPS" then
+		local compactAllowed = not compact or COMPACT_KEY_STAT_LABELS[statData.label]
+		if statData.stat and compactAllowed and (not statData.flag or actor.mainSkill.activeEffect.statSet.skillFlags[statData.flag]) and not statData.childStat and statData.stat ~= "SkillDPS" then
 			local statVal1 = compareOutput[statData.stat] or 0
 			local statVal2 = baseOutput[statData.stat] or 0
 			local diff = statVal1 - statVal2
@@ -2597,12 +2628,14 @@ function buildMode:CompareStatList(tooltip, statList, actor, baseOutput, compare
 					tooltip:AddLine(14, header)
 				end
 				local color = ((statData.lowerIsBetter and diff < 0) or (not statData.lowerIsBetter and diff > 0)) and colorCodes.POSITIVE or colorCodes.NEGATIVE
+				-- Compact mode prefixes the delta with a sign arrow: ^2▲ for an increase, ^1▼ for a decrease
+				local arrow = compact and (diff > 0 and "^2▲ " or "^1▼ ") or ""
 				local val = diff * ((statData.pc or statData.mod) and 100 or 1)
 				local valStr = s_format("%+"..statData.fmt, val) -- Can't use self:FormatStat, because it doesn't have %+. Adding that would have complicated a simple function
 
 				valStr = formatNumSep(valStr)
 
-				local line = s_format("%s%s %s", color, valStr, statData.label)
+				local line = s_format("%s%s%s %s", arrow, color, valStr, statData.label)
 				local pcPerPt = ""
 				if statData.compPercent and statVal1 ~= 0 and statVal2 ~= 0 then
 					local pc = statVal1 / statVal2 * 100 - 100
@@ -2627,6 +2660,11 @@ end
 -- Returns the number of stat lines added
 function buildMode:AddStatComparesToTooltip(tooltip, baseOutput, compareOutput, header, nodeCount)
 	local count = 0
+	-- Compact mode follows the Compact Item Tooltips option; holding ALT inverts it temporarily
+	local isCompact = main.compactTooltips
+	if IsKeyDown("ALT") then
+		isCompact = not isCompact
+	end
 	if self.calcsTab.mainEnv.player.mainSkill.minion and baseOutput.Minion and compareOutput.Minion then
 		count = count + self:CompareStatList(tooltip, self.minionDisplayStats, self.calcsTab.mainEnv.minion, baseOutput.Minion, compareOutput.Minion, header.."\n^7Minion:", nodeCount)
 		if count > 0 then
@@ -2635,7 +2673,7 @@ function buildMode:AddStatComparesToTooltip(tooltip, baseOutput, compareOutput, 
 			header = header.."\n^7Player:"
 		end
 	end
-	count = count + self:CompareStatList(tooltip, self.displayStats, self.calcsTab.mainEnv.player, baseOutput, compareOutput, header, nodeCount)
+	count = count + self:CompareStatList(tooltip, self.displayStats, self.calcsTab.mainEnv.player, baseOutput, compareOutput, header, nodeCount, isCompact)
 	return count
 end
 

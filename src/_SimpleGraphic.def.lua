@@ -299,6 +299,17 @@ function DrawImageQuad(imgHandle, x1, y1, x2, y2, x3, y3, x4, y4, s1, t1, s2, t2
 ---@param mask?      integer must be positive
 function DrawImageQuad(imgHandle, x1, y1, x2, y2, x3, y3, x4, y4, stackIdx, mask) end
 
+---@param x           number
+---@param y           number
+---@param w           number
+---@param h           number
+---@param radius      number corner rounding in px, clamped to 0..16
+---@param bgColor     number[] { r, g, b, a } in the 0..1 range, nil = current draw color
+---@param borderColor number[] { r, g, b, a } in the 0..1 range, nil = current draw color
+---@param borderWidth number border ring width in px, default 1, 0 = no border
+---@param shadowBlur  number soft drop shadow falloff in px, default 0 = no shadow
+function DrawControlBox(x, y, w, h, radius, bgColor, borderColor, borderWidth, shadowBlur) end
+
 ---@param left   number
 ---@param top    number
 ---@param align? ("LEFT"|"CENTER"|"RIGHT"|"CENTER_X"|"RIGHT_X")
@@ -371,6 +382,70 @@ end
 
 ---@param title string
 function SetWindowTitle(title) end
+
+---Toggles the Windows immersive dark mode for the window titlebar and border.
+---@param dark boolean
+function SetWindowDarkMode(dark) end
+
+---Sets the Windows 11 system backdrop material for the window.
+---Returns false on systems without DWMWA_SYSTEMBACKDROP_TYPE (pre-Windows 11 22H2, build < 22621).
+---@param backdrop ("None"|"Mica"|"MicaAlt")
+---@return boolean applied
+function SetWindowBackdrop(backdrop)
+	return true
+end
+
+---Remaps an indexed colour escape (^0..^9) used by text rendering, e.g. the
+---base text colour ^7 follows the active UI theme.
+---@param index number 0..9
+---@param r number
+---@param g number
+---@param b number
+function SetIndexedColor(index, r, g, b) end
+
+---Gets the position of the window in screen coordinates.
+---@return number x
+---@return number y
+function GetWindowPosition()
+	return 0, 0
+end
+
+---Moves the window to the given position (screen coordinates).
+---@param x number
+---@param y number
+function SetWindowPosition(x, y) end
+
+---Gets the size of the window in window coordinates.
+---@return number width
+---@return number height
+function GetWindowSize()
+	return 0, 0
+end
+
+---Resizes the window.
+---@param width number
+---@param height number
+function SetWindowSize(width, height) end
+
+---Checks whether the window is currently maximised.
+---@return boolean maximised
+function IsWindowMaximized()
+	return false
+end
+
+---Maximises or restores the window.
+---@param maximised boolean
+function SetWindowMaximized(maximised) end
+
+---Gets the bounds of the whole virtual desktop (union of all connected monitors).
+---Used to validate a restored window position.
+---@return number left
+---@return number top
+---@return number right
+---@return number bottom
+function GetMonitorBounds()
+	return 0, 0, 1920, 1080
+end
 
 ---@return number x
 ---@return number y

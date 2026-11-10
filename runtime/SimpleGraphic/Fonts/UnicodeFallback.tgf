@@ -1,0 +1,6 @@
+{
+	"comment": "PoB2 Unicode Fallback chain: Noto Sans SC provides full Cyrillic (RU) and CJK coverage when legacy Fontin bitmap lacks glyphs",
+	"fonts": [
+		{ "name": "Noto Sans SC Regular", "file": "notosanssc-regular.ttf", "scale": 1.0 }
+	]
+}

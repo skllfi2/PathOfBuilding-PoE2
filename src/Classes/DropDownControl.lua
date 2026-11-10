@@ -8,6 +8,8 @@ local m_min = math.min
 local m_max = math.max
 local m_floor = math.floor
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 local function drawStrikethrough(label, y, lineHeight)
 	local strWidth = DrawStringWidth(lineHeight, "VAR", label or "")
 	SetDrawColor(0.6, 0.6, 0.6)
@@ -255,30 +257,58 @@ function DropDownClass:Draw(viewPort, noTooltip)
 	local dropExtra = self.dropHeight + 4
 	scrollBar:SetContentDimension(lineHeight * self:GetDropCount(), self.dropHeight)
 	local dropY = self.dropUp and y - dropExtra or y + height
-	if not enabled then
-		SetDrawColor(0.33, 0.33, 0.33)
-	elseif mOver or self.dropped then
-		SetDrawColor(1, 1, 1)
-	elseif self.borderFunc then
-		local r, g, b = self.borderFunc()
-		SetDrawColor(r, g, b)
+	if DrawControlBox then
+		-- WinUI 3 Fluent style: rounded body, gold border while the list is dropped
+		local tokens = ThemeFluent.dropdown
+		local bg, border
+		if not enabled then
+			bg, border = tokens.bgDisabled, tokens.borderDisabled
+		elseif self.dropped then
+			bg, border = tokens.bg, tokens.borderOpen
+		elseif self.borderFunc then
+			-- Validation border keeps priority over the hover border
+			local r, g, b = self.borderFunc()
+			bg, border = tokens.bg, { r, g, b, 1 }
+		elseif mOver then
+			bg, border = tokens.bg, tokens.borderHover
+		else
+			bg, border = tokens.bg, tokens.border
+		end
+		DrawControlBox(x, y, width, height, tokens.radius, bg, border, tokens.borderWidth, tokens.shadowBlur)
+		if self.dropped then
+			-- Fluent: the whole popup card (fill, border, soft shadow) in one pass
+			local popup = tokens.popup
+			SetDrawLayer(nil, 5)
+			DrawControlBox(x, dropY, self.droppedWidth, dropExtra, popup.radius, popup.bg, popup.border, popup.borderWidth, popup.shadowBlur)
+			SetDrawLayer(nil, 0)
+		end
 	else
-		SetDrawColor(0.5, 0.5, 0.5)
+		-- Legacy SimpleGraphic rendering (runtime without DrawControlBox)
+		if not enabled then
+			SetDrawColor(0.33, 0.33, 0.33)
+		elseif mOver or self.dropped then
+			SetDrawColor(1, 1, 1)
+		elseif self.borderFunc then
+			local r, g, b = self.borderFunc()
+			SetDrawColor(r, g, b)
+		else
+			SetDrawColor(0.5, 0.5, 0.5)
+		end
+		DrawImage(nil, x, y, width, height)
+		if self.dropped then
+			SetDrawLayer(nil, 5)
+			DrawImage(nil, x, dropY, self.droppedWidth, dropExtra)
+			SetDrawLayer(nil, 0)
+		end
+		if not enabled or self.dropped then
+			SetDrawColor(0, 0, 0)
+		elseif mOver then
+			SetDrawColor(0.33, 0.33, 0.33)
+		else
+			SetDrawColor(0, 0, 0)
+		end
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	end
-	DrawImage(nil, x, y, width, height)
-	if self.dropped then
-		SetDrawLayer(nil, 5)
-		DrawImage(nil, x, dropY, self.droppedWidth, dropExtra)
-		SetDrawLayer(nil, 0)
-	end
-	if not enabled or self.dropped then
-		SetDrawColor(0, 0, 0)
-	elseif mOver then
-		SetDrawColor(0.33, 0.33, 0.33)
-	else
-		SetDrawColor(0, 0, 0)
-	end
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	if not enabled then
 		SetDrawColor(0.33, 0.33, 0.33)
 	elseif mOver or self.dropped then
@@ -287,7 +317,8 @@ function DropDownClass:Draw(viewPort, noTooltip)
 		SetDrawColor(0.5, 0.5, 0.5)
 	end
 	main:DrawArrow(x + width - height/2, y + height/2, height/2, height/2, "DOWN")
-	if self.dropped then
+	if self.dropped and not DrawControlBox then
+		-- Legacy only: Fluent fills the popup card in a single DrawControlBox pass
 		SetDrawLayer(nil, 5)
 		SetDrawColor(0, 0, 0)
 		DrawImage(nil, x + 1, dropY + 1, self.droppedWidth - 2, dropExtra - 2)
@@ -309,9 +340,18 @@ function DropDownClass:Draw(viewPort, noTooltip)
 				mOver and "BODY" or "OUT", self.selIndex, self.list[self.selIndex])
 			SetDrawLayer(nil, 0)
 		end
-		SetDrawColor(1, 1, 1)
+		if DrawControlBox then
+			-- Fluent: selected label follows the palette text tokens
+			SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+		else
+			SetDrawColor(1, 1, 1)
+		end
 	else
-		SetDrawColor(0.66, 0.66, 0.66)
+		if DrawControlBox then
+			SetDrawColor(unpack(ThemeFluent.colors.textDisabled))
+		else
+			SetDrawColor(0.66, 0.66, 0.66)
+		end
 	end
 	-- draw selected label or search term
 	local selLabel = nil
@@ -376,14 +416,29 @@ function DropDownClass:Draw(viewPort, noTooltip)
 				local y = (dropIndex - 1) * lineHeight - scrollBar.offset
 				-- highlight background if hovered
 				if index == self.hoverSel then
-					SetDrawColor(0.33, 0.33, 0.33)
-					DrawImage(nil, 0, y, width - 4, lineHeight)
+					if DrawControlBox then
+						-- Fluent: rounded hover highlight
+						local tokens = ThemeFluent.dropdown
+						DrawControlBox(0, y, width - 4, lineHeight, tokens.itemHoverRadius, tokens.itemHoverBg, tokens.popup.border, 0, 0)
+					else
+						SetDrawColor(0.33, 0.33, 0.33)
+						DrawImage(nil, 0, y, width - 4, lineHeight)
+					end
 				end
 				-- highlight font color if hovered or selected
-				if index == self.hoverSel or index == self.selIndex then
-					SetDrawColor(1, 1, 1)
+				if DrawControlBox then
+					-- Fluent: palette text tokens (row highlight provides the distinction)
+					if index == self.hoverSel or index == self.selIndex then
+						SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+					else
+						SetDrawColor(unpack(ThemeFluent.colors.textSecondary))
+					end
 				else
-					SetDrawColor(0.66, 0.66, 0.66)
+					if index == self.hoverSel or index == self.selIndex then
+						SetDrawColor(1, 1, 1)
+					else
+						SetDrawColor(0.66, 0.66, 0.66)
+					end
 				end
 				-- draw actual item label with search match highlight if available
 				local label = nil
@@ -397,10 +452,18 @@ function DropDownClass:Draw(viewPort, noTooltip)
 				DrawString(0, y, "LEFT", lineHeight, "VAR", label)
 				if type(listVal) == "table" and listVal.strikethrough then
 					drawStrikethrough(label, y, lineHeight)
-					if index == self.hoverSel or index == self.selIndex then
-						SetDrawColor(1, 1, 1)
+					if DrawControlBox then
+						if index == self.hoverSel or index == self.selIndex then
+							SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+						else
+							SetDrawColor(unpack(ThemeFluent.colors.textSecondary))
+						end
 					else
-						SetDrawColor(0.66, 0.66, 0.66)
+						if index == self.hoverSel or index == self.selIndex then
+							SetDrawColor(1, 1, 1)
+						else
+							SetDrawColor(0.66, 0.66, 0.66)
+						end
 					end
 				end
 				if detail ~= nil then
@@ -411,7 +474,11 @@ function DropDownClass:Draw(viewPort, noTooltip)
 				self:DrawSearchHighlights(label, searchInfo, 0, y, width - 4, lineHeight)
 			end
 		end
-		SetDrawColor(1, 1, 1)
+		if DrawControlBox then
+			SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+		else
+			SetDrawColor(1, 1, 1)
+		end
 		if self:IsSearchActive() and self:GetMatchCount() == 0 then
 			DrawString(0, 0 , "LEFT", lineHeight, "VAR", "<No matches>")
 		end

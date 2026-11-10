@@ -22,6 +22,8 @@ LoadModule("Modules/ModTools")
 LoadModule("Modules/ItemTools")
 LoadModule("Modules/CalcTools")
 LoadModule("Modules/BuildSiteTools")
+UIFont = LoadModule("Modules/UIFont")
+WindowState = LoadModule("Modules/WindowState")
 
 --[[if launch.devMode then
 	for skillName, skill in pairs(data.enchantments.Helmet) do
@@ -108,6 +110,8 @@ function main:Init()
 	self.dpiScaleOverridePercent = GetDPIScaleOverridePercent and GetDPIScaleOverridePercent() or 0
 	self.showWarnings = true
 	self.slotOnlyTooltips = true
+	self.compactTooltips = false
+	self.sideBySideItemComparison = true
 	self.migrateAugments = true
 	self.notSupportedModTooltips = true
 	self.notSupportedTooltipText = " ^8(Not supported in PoB yet)"
@@ -117,6 +121,8 @@ function main:Init()
 	self.showAllItemAffixes = true
 	self.disableScrollControlInteraction = false
 	self.errorReadingSettings = false
+	self.uiFont = UIFont.defaultPreset
+	self.uiAccent = "PoE2 Gold"
 
 	if not SetDPIScaleOverridePercent then SetDPIScaleOverridePercent = function(scale) end end
 
@@ -146,6 +152,9 @@ function main:Init()
 	if self.userPath then
 		self:ChangeUserPath(self.userPath, ignoreBuild)
 	end
+	-- The window already exists at this point, so the stored geometry can be
+	-- restored (the settings have been read by ChangeUserPath above).
+	self:ApplyWindowState()
 
 	---@type ItemDBData
 	self.uniqueDB = { list = {}, loading = true }
@@ -546,6 +555,10 @@ function main:CallMode(func, ...)
 end
 
 function main:LoadSettings(ignoreBuild)
+	-- Reset the Side-by-Side default before reading Settings.xml: an old or
+	-- hand-edited file with no sideBySideItemComparison attribute keeps the
+	-- feature enabled instead of inheriting stale in-memory state.
+	self.sideBySideItemComparison = true
 	if self.errorReadingSettings then
 		return true
 	end
@@ -671,6 +684,12 @@ function main:LoadSettings(ignoreBuild)
 				if node.attrib.slotOnlyTooltips then
 					self.slotOnlyTooltips = node.attrib.slotOnlyTooltips == "true"
 				end
+				if node.attrib.compactTooltips then
+					self.compactTooltips = node.attrib.compactTooltips == "true"
+				end
+				if node.attrib.sideBySideItemComparison then
+					self.sideBySideItemComparison = node.attrib.sideBySideItemComparison == "true"
+				end
 				if node.attrib.migrateAugments then
 					self.migrateAugments = node.attrib.migrateAugments == "true"
 				end
@@ -702,8 +721,62 @@ function main:LoadSettings(ignoreBuild)
 					self.dpiScaleOverridePercent = tonumber(node.attrib.dpiScaleOverridePercent) or 0
 					SetDPIScaleOverridePercent(self.dpiScaleOverridePercent)
 				end
+				if node.attrib.uiFont and UIFont.IsValidPreset(node.attrib.uiFont) then
+					self.uiFont = node.attrib.uiFont
+				end
+				if node.attrib.uiAccent then
+					self.uiAccent = node.attrib.uiAccent
+				end
+				if type(WindowState) == "table" then
+					self.windowState = WindowState.Read(node.attrib)
+				end
 			end
 		end
+	end
+end
+
+-- Applies the persisted customization fields right after LoadSettings has
+-- read them: the accent switches live through ThemeFluent, while the font
+-- preset can only sync the disk state (font slots reload on restart).
+function main:ApplyUICustomization()
+	if type(UIFont) == "table" then
+		UIFont.Sync(self.uiFont)
+	else
+		ConPrintf("UIFont module unavailable; font preset sync skipped")
+	end
+	local ThemeFluent = LoadModule("Modules/ThemeFluent")
+	if ThemeFluent and ThemeFluent.SetAccent then
+		if not ThemeFluent:SetAccent(self.uiAccent) then
+			self.uiAccent = ThemeFluent:GetAccent()
+			ConPrintf("Unknown uiAccent value; reverted to '%s'", self.uiAccent)
+		end
+	end
+end
+
+-- Restores the window geometry stored in Settings.xml (position, size and
+-- the maximised flag). The stored position is validated against the current
+-- virtual desktop: a window that would end up completely off-screen (for
+-- example after a second monitor has been disconnected) is moved back into
+-- the visible area instead.
+function main:ApplyWindowState()
+	if self.windowStateApplied or type(WindowState) ~= "table" then
+		return
+	end
+	if not self.windowState then
+		return
+	end
+	self.windowStateApplied = true
+	local bounds = WindowState.GetBounds()
+	if not bounds then
+		ConPrintf("Window state: screen bounds are unavailable, saved geometry ignored")
+		return
+	end
+	local state, corrected = WindowState.Clamp(self.windowState, bounds)
+	if corrected then
+		ConPrintf("Window state: saved position was outside the visible screen and has been adjusted")
+	end
+	if WindowState.Apply(state) then
+		self.windowState = state
 	end
 end
 
@@ -803,7 +876,7 @@ function main:SaveSettings()
 		t_insert(sharedItemList, set)
 	end
 	t_insert(setXML, sharedItemList)
-	t_insert(setXML, { elem = "Misc", attrib = {
+	local miscAttrib = {
 		buildSortMode = self.buildSortMode,
 		connectionProtocol = tostring(launch.connectionProtocol),
 		proxyURL = launch.proxyURL,
@@ -825,6 +898,8 @@ function main:SaveSettings()
 		lastExportWebsite = self.lastExportWebsite,
 		showWarnings = tostring(self.showWarnings),
 		slotOnlyTooltips = tostring(self.slotOnlyTooltips),
+		compactTooltips = tostring(self.compactTooltips),
+		sideBySideItemComparison = tostring(self.sideBySideItemComparison),
 		migrateAugments = tostring(self.migrateAugments),
 		notSupportedModTooltips = tostring(self.notSupportedModTooltips),
 		invertSliderScrollDirection = tostring(self.invertSliderScrollDirection),
@@ -834,8 +909,25 @@ function main:SaveSettings()
 		showAnimations = tostring(self.showAnimations),
 		showAllItemAffixes = tostring(self.showAllItemAffixes),
 		disableScrollControlInteraction = tostring(self.disableScrollControlInteraction),
-		dpiScaleOverridePercent = tostring(self.dpiScaleOverridePercent)
-	} })
+		dpiScaleOverridePercent = tostring(self.dpiScaleOverridePercent),
+		uiFont = self.uiFont or "authentic",
+		uiAccent = self.uiAccent or "PoE2 Gold"
+	}
+	-- Persist the current window geometry (position, size, maximised flag) so
+	-- that it can be restored on the next start
+	if type(WindowState) == "table" then
+		local captured = WindowState.Capture()
+		if captured then
+			if captured.maximised and self.windowState then
+				-- Keep the last known normal size while the window is maximised
+				captured.width = self.windowState.width
+				captured.height = self.windowState.height
+			end
+			self.windowState = captured
+			WindowState.Write(miscAttrib, captured)
+		end
+	end
+	t_insert(setXML, { elem = "Misc", attrib = miscAttrib })
 	local res, errMsg = common.xml.SaveXMLFile(setXML, self.userPath.."Settings.xml")
 	if not res then
 		launch:ShowErrMsg("Error saving 'Settings.xml': %s", errMsg)
@@ -886,6 +978,8 @@ function main:ChangeUserPath(newUserPath, ignoreBuild)
 	MakeDir(self.buildPath)
 	self:LoadSettings(ignoreBuild)
 	self:LoadSharedItems()
+	self:ApplyUICustomization()
+	self:ApplyWindowState()
 end
 --- Opens the popup for the "Options" menu
 --- @param savedState table|nil optional passing of saved values, in case of reopening `{nodePowerTheme, colorPositive, ...}`
@@ -911,6 +1005,8 @@ function main:OpenOptionsPopup(savedState)
 		defaultItemAffixQuality = self.defaultItemAffixQuality or 0.5,
 		showWarnings = self.showWarnings,
 		slotOnlyTooltips = self.slotOnlyTooltips,
+		compactTooltips = self.compactTooltips,
+		sideBySideItemComparison = self.sideBySideItemComparison,
 		migrateAugments = self.migrateAugments,
 		notSupportedModTooltips = self.notSupportedModTooltips,
 		invertSliderScrollDirection = self.invertSliderScrollDirection,
@@ -919,7 +1015,9 @@ function main:OpenOptionsPopup(savedState)
 		showAnimations = self.showAnimations,
 		showAllItemAffixes = self.showAllItemAffixes,
 		disableScrollControlInteraction = self.disableScrollControlInteraction,
-		dpiScaleOverridePercent = self.dpiScaleOverridePercent
+		dpiScaleOverridePercent = self.dpiScaleOverridePercent,
+		uiFont = self.uiFont or UIFont.defaultPreset,
+		uiAccent = self.uiAccent or "PoE2 Gold",
 	}
 
 	-- NOTE: Height needs to be adjusted if more menu options are added
@@ -1027,6 +1125,31 @@ function main:OpenOptionsPopup(savedState)
 	controls.nodePowerThemeLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.nodePowerTheme, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Node Power colours:")
 	controls.nodePowerTheme.tooltipText = "Changes the colour scheme used for the node power display on the passive tree."
 	controls.nodePowerTheme:SelByValue(self.nodePowerTheme, "theme")
+
+	nextRow()
+	controls.uiFont = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 190, 18 }, UIFont.GetPresetList(), function(index, value)
+		self.uiFont = value.id
+	end)
+	controls.uiFontLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.uiFont, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7UI Font:")
+	controls.uiFont.tooltipText = "Font preset for the interface.\nSwitching the preset requires restarting Path of Building."
+	controls.uiFont:SelByValue(savedState.uiFont, "id")
+
+	nextRow()
+	controls.uiAccent = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 120, 18 }, {
+		{ label = "PoE2 Gold", accent = "PoE2 Gold" },
+		{ label = "Fluent Blue", accent = "Fluent Blue" },
+		{ label = "Crimson", accent = "Crimson" },
+		{ label = "Emerald", accent = "Emerald" },
+	}, function(index, value)
+		self.uiAccent = value.accent
+		local ThemeFluent = LoadModule("Modules/ThemeFluent")
+		if ThemeFluent and ThemeFluent.SetAccent then
+			ThemeFluent:SetAccent(value.accent)
+		end
+	end)
+	controls.uiAccentLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.uiAccent, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Accent Color:")
+	controls.uiAccent.tooltipText = "Accent colour of the Fluent UI theme (buttons, checkboxes, slider fill, selection highlights).\nSwitches live; the setting is saved with Options."
+	controls.uiAccent:SelByValue(savedState.uiAccent, "accent")
 
 	nextRow()
 	controls.colorPositive = new("EditControl"):EditControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 100, 18 }, tostring(self.colorPositive:gsub('^(^)', '0')), nil, nil, 8, function(buf)
@@ -1191,6 +1314,20 @@ function main:OpenOptionsPopup(savedState)
 	controls.notSupportedModTooltips.state = self.notSupportedModTooltips
 
 	nextRow()
+	controls.compactTooltips = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Compact Item Tooltips:", function(state)
+		self.compactTooltips = state
+	end)
+	controls.compactTooltips.tooltipText = "Hides flavour text, non-essential headers, and compresses stat diffs into a compact single-line view.\nHold ALT to temporarily toggle full view."
+	controls.compactTooltips.state = self.compactTooltips
+
+	nextRow()
+	controls.sideBySideItemComparison = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Side-by-Side Item Comparison:", function(state)
+		self.sideBySideItemComparison = state
+	end)
+	controls.sideBySideItemComparison.tooltipText = "Shows the currently equipped item next to an unequipped item tooltip.\nIn compact mode, hold SHIFT to switch between paired slots such as Ring 1 and Ring 2."
+	controls.sideBySideItemComparison.state = self.sideBySideItemComparison
+
+	nextRow()
 	controls.invertSliderScrollDirection = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Invert slider scroll direction:", function(state)
 		self.invertSliderScrollDirection = state
 	end)
@@ -1244,8 +1381,25 @@ function main:OpenOptionsPopup(savedState)
 			main:SetManifestBranch(self.betaTest and "beta" or "master")
 		end
 		SetDPIScaleOverridePercent(self.dpiScaleOverridePercent)
+		local fontChanged = self.uiFont ~= savedState.uiFont
+		local fontError
+		if fontChanged and type(UIFont) == "table" then
+			local ok, err = UIFont.ApplyPreset(self.uiFont)
+			if not ok then
+				fontError = "Failed to apply the '"..UIFont.GetLabel(self.uiFont).."' font preset:\n"..tostring(err)
+			end
+		end
 		main:ClosePopup()
 		main:SaveSettings()
+		if fontError then
+			self:OpenMessagePopup("UI Font Error", fontError)
+		elseif fontChanged then
+			self:OpenConfirmPopup("UI Font Changed", "The font preset was changed to '"..UIFont.GetLabel(self.uiFont).."'.\nRestart Path of Building to apply it.", "Restart now", function()
+				Restart()
+			end, "Later", function()
+				-- nothing else to do
+			end)
+		end
 	end)
 	controls.cancel = new("ButtonControl"):ButtonControl({ "BOTTOM", nil, "BOTTOM" }, { 45, -10, 80, 20 }, "Cancel", function()
 		self.nodePowerTheme = savedState.nodePowerTheme
@@ -1267,6 +1421,8 @@ function main:OpenOptionsPopup(savedState)
 		self.defaultItemAffixQuality = savedState.defaultItemAffixQuality
 		self.showWarnings = savedState.showWarnings
 		self.slotOnlyTooltips = savedState.slotOnlyTooltips
+		self.compactTooltips = savedState.compactTooltips
+		self.sideBySideItemComparison = savedState.sideBySideItemComparison
 		self.migrateAugments = savedState.migrateAugments
 		self.notSupportedModTooltips = savedState.notSupportedModTooltips
 		self.invertSliderScrollDirection = savedState.invertSliderScrollDirection
@@ -1278,6 +1434,12 @@ function main:OpenOptionsPopup(savedState)
 		self.disableScrollControlInteraction = savedState.disableScrollControlInteraction
 		self.dpiScaleOverridePercent = savedState.dpiScaleOverridePercent
 		SetDPIScaleOverridePercent(self.dpiScaleOverridePercent)
+		self.uiFont = savedState.uiFont
+		self.uiAccent = savedState.uiAccent
+		local ThemeFluent = LoadModule("Modules/ThemeFluent")
+		if ThemeFluent and ThemeFluent.SetAccent then
+			ThemeFluent:SetAccent(self.uiAccent)
+		end
 		main:ClosePopup()
 	end)
 
@@ -1295,6 +1457,47 @@ function main:OpenOptionsPopup(savedState)
 	end
 
 	local popup = self:OpenPopup(popupWidth, popupHeight, "Options", controls, "save", nil, "cancel", useScrollBar and scrollBarFunc or nil)
+	popup.isOptionsPopup = true
+
+	local lastScreenW, lastScreenH = self.screenW, self.screenH
+	popup.resizeFunc = function()
+		if self.popups[1] == popup and (self.screenW ~= lastScreenW or self.screenH ~= lastScreenH) then
+			lastScreenW, lastScreenH = self.screenW, self.screenH
+			local currentState = {
+				nodePowerTheme = self.nodePowerTheme,
+				colorPositive = self.colorPositive,
+				colorNegative = self.colorNegative,
+				colorHighlight = self.colorHighlight,
+				showThousandsSeparators = controls.showThousandsSeparators and controls.showThousandsSeparators.state or self.showThousandsSeparators,
+				thousandsSeparator = controls.thousandsSeparator and controls.thousandsSeparator.buf or self.thousandsSeparator,
+				decimalSeparator = controls.decimalSeparator and controls.decimalSeparator.buf or self.decimalSeparator,
+				showTitlebarName = controls.titlebarName and controls.titlebarName.state or self.showTitlebarName,
+				betaTest = controls.betaTest and controls.betaTest.state or self.betaTest,
+				edgeSearchHighlight = controls.edgeSearchHighlight and controls.edgeSearchHighlight.state or self.edgeSearchHighlight,
+				defaultGemQuality = controls.defaultGemQuality and tonumber(controls.defaultGemQuality.buf) or (self.defaultGemQuality or 0),
+				defaultItemQuality = controls.defaultItemQuality and tonumber(controls.defaultItemQuality.buf) or (self.defaultItemQuality or 20),
+				defaultCharLevel = controls.defaultCharLevel and tonumber(controls.defaultCharLevel.buf) or (self.defaultCharLevel or 1),
+				defaultItemAffixQuality = controls.defaultItemAffixQuality and tonumber(controls.defaultItemAffixQuality.buf) or (self.defaultItemAffixQuality or 0.5),
+				showWarnings = controls.showWarnings and controls.showWarnings.state or self.showWarnings,
+				slotOnlyTooltips = controls.slotOnlyTooltips and controls.slotOnlyTooltips.state or self.slotOnlyTooltips,
+				compactTooltips = controls.compactTooltips and controls.compactTooltips.state or self.compactTooltips,
+				sideBySideItemComparison = controls.sideBySideItemComparison and controls.sideBySideItemComparison.state or self.sideBySideItemComparison,
+				migrateAugments = controls.migrateAugments and controls.migrateAugments.state or self.migrateAugments,
+				notSupportedModTooltips = controls.notSupportedModTooltips and controls.notSupportedModTooltips.state or self.notSupportedModTooltips,
+				invertSliderScrollDirection = controls.invertSliderScrollDirection and controls.invertSliderScrollDirection.state or self.invertSliderScrollDirection,
+				disableDevAutoSave = controls.disableDevAutoSave and controls.disableDevAutoSave.state or self.disableDevAutoSave,
+				showFlavourText = controls.showFlavourText and controls.showFlavourText.state or self.showFlavourText,
+				showAnimations = controls.showAnimations and controls.showAnimations.state or self.showAnimations,
+				showAllItemAffixes = controls.showAllItemAffixes and controls.showAllItemAffixes.state or self.showAllItemAffixes,
+				disableScrollControlInteraction = controls.disableScrollControlInteraction and controls.disableScrollControlInteraction.state or self.disableScrollControlInteraction,
+				dpiScaleOverridePercent = self.dpiScaleOverridePercent,
+				uiFont = self.uiFont or UIFont.defaultPreset,
+				uiAccent = self.uiAccent or "PoE2 Gold",
+			}
+			self:ClosePopup()
+			self:OpenOptionsPopup(currentState)
+		end
+	end
 
 	local originalDrawControls = popup.DrawControls
 

@@ -30,6 +30,8 @@ local m_min = math.min
 local m_max = math.max
 local m_floor = math.floor
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 ---@class ListControl<T>: Control, ControlHost
 ---@field list T[]
 local ListClass = newClass("ListControl", "Control", "ControlHost")
@@ -137,6 +139,7 @@ function ListClass:Draw(viewPort, noTooltip)
 	local width, height = self:GetSize()
 	local rowHeight = self.rowHeight
 	local list = self.list
+	local listTokens = DrawControlBox and ThemeFluent.list
 
 	local colOffset = 0
 	for index, column in ipairs(self.colList) do
@@ -191,20 +194,31 @@ function ListClass:Draw(viewPort, noTooltip)
 	if label then
 		DrawString(x + self.labelPositionOffset[1], y - 20 + self.labelPositionOffset[2], "LEFT", 16, self.font, label)
 	end
-	if self.otherDragSource and not self.CanDragToValue then
-		SetDrawColor(0.2, 0.6, 0.2)
-	elseif self.hasFocus then
-		SetDrawColor(1, 1, 1)
+	if DrawControlBox then
+		-- WinUI 3 Fluent style: rounded panel with a hairline border
+		local bg, border = listTokens.bg, listTokens.border
+		if self.otherDragSource and not self.CanDragToValue then
+			bg, border = listTokens.dragTargetBg, listTokens.dragTargetBorder
+		elseif self.hasFocus then
+			border = listTokens.borderFocus
+		end
+		DrawControlBox(x, y, width, height, listTokens.radius, bg, border, listTokens.borderWidth, listTokens.shadowBlur)
 	else
-		SetDrawColor(0.5, 0.5, 0.5)
+		if self.otherDragSource and not self.CanDragToValue then
+			SetDrawColor(0.2, 0.6, 0.2)
+		elseif self.hasFocus then
+			SetDrawColor(1, 1, 1)
+		else
+			SetDrawColor(0.5, 0.5, 0.5)
+		end
+		DrawImage(nil, x, y, width, height)
+		if self.otherDragSource and not self.CanDragToValue then
+			SetDrawColor(0, 0.05, 0)
+		else
+			SetDrawColor(0, 0, 0)
+		end
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	end
-	DrawImage(nil, x, y, width, height)
-	if self.otherDragSource and not self.CanDragToValue then
-		SetDrawColor(0, 0.05, 0)
-	else
-		SetDrawColor(0, 0, 0)
-	end
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	self:DrawControls(viewPort, (noTooltip and not self.forceTooltip) and self)
 
 	SetViewport(x + 2, y + 2,  self.scroll and width - 20 or width, height - 4 - (self.scroll and self.scrollH and 16 or 0))
@@ -243,7 +257,37 @@ function ListClass:Draw(viewPort, noTooltip)
 					ttWidth = m_max(textWidth + 8, relX - colOffset)
 				end
 			end
-			if self.showRowSeparators then
+			local isSelRow = value == self.selValue
+			local isHoverRow = value == ttValue
+			local rowWidth = not self.scroll and colWidth - 4 or colWidth
+			if DrawControlBox then
+				-- WinUI 3 Fluent row rendering
+				if self.showRowSeparators then
+					-- hairline separator instead of the legacy zebra bands
+					SetDrawColor(unpack(listTokens.rowSeparator))
+					DrawImage(nil, colOffset, lineY + rowHeight - 1, rowWidth, 1)
+				end
+				if isSelRow or isHoverRow then
+					if self.otherDragSource and self.CanDragToValue and self:CanDragToValue(index, value, self.otherDragSource) then
+						-- legacy drag-target feedback (functional signal, not themed)
+						SetDrawColor(0, 0.2, 0)
+						DrawImage(nil, colOffset, lineY + 1, rowWidth, rowHeight - 2)
+					else
+						local rowBg
+						if isSelRow then
+							rowBg = self.hasFocus and listTokens.rowSelectedBg or listTokens.rowSelectedBgUnfocused
+						else
+							rowBg = listTokens.rowHoverBg
+						end
+						DrawControlBox(colOffset, lineY, rowWidth, rowHeight, listTokens.rowRadius, rowBg, nil, 0, 0)
+						if isSelRow and colIndex == 1 and rowHeight > 2 * listTokens.rowIndicatorWidth then
+							-- Windows 11 ListView style accent indicator on the left edge
+							SetDrawColor(unpack(listTokens.rowIndicator))
+							DrawImage(nil, colOffset, lineY + 2, listTokens.rowIndicatorWidth, rowHeight - 4)
+						end
+					end
+				end
+			elseif self.showRowSeparators then
 				if self.hasFocus and value == self.selValue then
 					SetDrawColor(1, 1, 1)
 				elseif value == ttValue then
@@ -251,7 +295,7 @@ function ListClass:Draw(viewPort, noTooltip)
 				else
 					SetDrawColor(0.5, 0.5, 0.5)
 				end
-				DrawImage(nil, colOffset, lineY, not self.scroll and colWidth - 4 or colWidth, rowHeight)
+				DrawImage(nil, colOffset, lineY, rowWidth, rowHeight)
 				if (value == self.selValue or value == ttValue) then
 					SetDrawColor(0.33, 0.33, 0.33)
 				elseif self.otherDragSource and self.CanDragToValue and self:CanDragToValue(index, value, self.otherDragSource) then
@@ -261,8 +305,8 @@ function ListClass:Draw(viewPort, noTooltip)
 				else
 					SetDrawColor(0, 0, 0)
 				end
-				DrawImage(nil, colOffset, lineY + 1, not self.scroll and colWidth - 4 or colWidth, rowHeight - 2)
-			elseif value == self.selValue or value == ttValue then
+				DrawImage(nil, colOffset, lineY + 1, rowWidth, rowHeight - 2)
+			elseif isSelRow or isHoverRow then
 				if self.hasFocus and value == self.selValue then
 					SetDrawColor(1, 1, 1)
 				elseif value == ttValue then
@@ -270,16 +314,21 @@ function ListClass:Draw(viewPort, noTooltip)
 				else
 					SetDrawColor(0.5, 0.5, 0.5)
 				end
-				DrawImage(nil, colOffset, lineY, not self.scroll and colWidth - 4 or colWidth, rowHeight)
+				DrawImage(nil, colOffset, lineY, rowWidth, rowHeight)
 				if self.otherDragSource and self.CanDragToValue and self:CanDragToValue(index, value, self.otherDragSource) then
 					SetDrawColor(0, 0.2, 0)
 				else
 					SetDrawColor(0.15, 0.15, 0.15)
 				end
-				DrawImage(nil, colOffset, lineY + 1, not self.scroll and colWidth - 4 or colWidth, rowHeight - 2)
+				DrawImage(nil, colOffset, lineY + 1, rowWidth, rowHeight - 2)
 			end
 			if not self.SetHighlightColor or not self:SetHighlightColor(index, value) then
-				SetDrawColor(1, 1, 1)
+				if DrawControlBox then
+					-- Fluent: row text follows the palette text tokens
+					SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+				else
+					SetDrawColor(1, 1, 1)
+				end
 			end
 			-- TODO: handle icon size properly, for now assume they are 16x16
 			if icon == nil then
@@ -310,7 +359,11 @@ function ListClass:Draw(viewPort, noTooltip)
 		end
 	end
 	if #self.list == 0 and self.defaultText then
-		SetDrawColor(1, 1, 1)
+		if DrawControlBox then
+			SetDrawColor(unpack(ThemeFluent.colors.textPrimary))
+		else
+			SetDrawColor(1, 1, 1)
+		end
 		DrawString(2, 2, "LEFT", 14, self.font, self.defaultText)
 	end
 	if self.selDragIndex then

@@ -8,6 +8,8 @@ local m_max = math.max
 local m_ceil = math.ceil
 local m_floor = math.floor
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 ---@class ScrollBarControl: Control
 local ScrollBarClass = newClass("ScrollBarControl", "Control")
 
@@ -242,16 +244,35 @@ function ScrollBarClass:Draw()
 	end
 	-- Draw knob
 	if enabled then
-		if self.dragging or mOverComp == "KNOB" then
-			SetDrawColor(1, 1, 1)
-		else
-			SetDrawColor(0.5, 0.5, 0.5)
-		end
 		local knobPos = self:GetKnobPosForOffset()
-		if dir == "HORIZONTAL" then
-			DrawImage(nil, x + height + knobPos + 1, y + 2, self.knobDim - 2, height - 4)
+		if DrawControlBox then
+			-- WinUI 3 Fluent style: rounded thumb plate with hover/drag highlight
+			local tokens = ThemeFluent.scrollbar
+			local thumbCol
+			if self.dragging then
+				thumbCol = tokens.thumbDrag
+			elseif mOverComp == "KNOB" then
+				thumbCol = tokens.thumbHover
+			else
+				thumbCol = tokens.thumb
+			end
+			if dir == "HORIZONTAL" then
+				DrawControlBox(x + height + knobPos + 1, y + 2, self.knobDim - 2, height - 4, tokens.radius, thumbCol, thumbCol, tokens.borderWidth, tokens.shadowBlur)
+			else
+				DrawControlBox(x + 2, y + width + knobPos + 1, width - 4, self.knobDim - 2, tokens.radius, thumbCol, thumbCol, tokens.borderWidth, tokens.shadowBlur)
+			end
 		else
-			DrawImage(nil, x + 2, y + width + knobPos + 1, width - 4, self.knobDim - 2)
+			-- Legacy SimpleGraphic rendering (runtime without DrawControlBox)
+			if self.dragging or mOverComp == "KNOB" then
+				SetDrawColor(1, 1, 1)
+			else
+				SetDrawColor(0.5, 0.5, 0.5)
+			end
+			if dir == "HORIZONTAL" then
+				DrawImage(nil, x + height + knobPos + 1, y + 2, self.knobDim - 2, height - 4)
+			else
+				DrawImage(nil, x + 2, y + width + knobPos + 1, width - 4, self.knobDim - 2)
+			end
 		end
 	end
 end

@@ -7,7 +7,10 @@ local m_max = math.max
 local m_min = math.min
 local m_floor = math.floor
 local protected_replace = "*"
+local unpack = unpack
 local utf8 = require('lua-utf8')
+
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
 
 local function lastLine(str)
 	local lastLineIndex = 1
@@ -247,29 +250,50 @@ function EditClass:Draw(viewPort, noTooltip)
 	local width, height = self:GetSize()
 	local enabled = self:IsEnabled()
 	local mOver = self:IsMouseOver()
-	if not enabled then
-		SetDrawColor(0.33, 0.33, 0.33)
-	elseif mOver then
-		SetDrawColor(1, 1, 1)
-	elseif self.borderFunc then
-		local r, g, b = self.borderFunc()
-		SetDrawColor(r, g, b)
-	else
-		SetDrawColor(0.5, 0.5, 0.5)
-	end
-	DrawImage(nil, x, y, width, height)
-	if not enabled then
-		SetDrawColor(0, 0, 0)
-	elseif self.hasFocus or mOver then
-		if self.lineHeight then
-			SetDrawColor(0.1, 0.1, 0.1)
+	if DrawControlBox then
+		-- WinUI 3 Fluent style: rounded dark input with an accent focus border
+		local tokens = ThemeFluent.edit
+		local bg, border
+		if not enabled then
+			bg, border = tokens.bgDisabled, tokens.borderDisabled
+		elseif self.borderFunc then
+			-- Validation border keeps priority over the focus ring
+			local r, g, b = self.borderFunc()
+			bg, border = tokens.bg, { r, g, b, 1 }
+		elseif self.hasFocus then
+			bg, border = tokens.bg, tokens.borderFocus
+		elseif mOver then
+			bg, border = tokens.bg, tokens.borderHover
 		else
-			SetDrawColor(0.15, 0.15, 0.15)
+			bg, border = tokens.bg, tokens.border
 		end
+		DrawControlBox(x, y, width, height, tokens.radius, bg, border, tokens.borderWidth, tokens.shadowBlur)
 	else
-		SetDrawColor(0, 0, 0)
+		-- Legacy SimpleGraphic rendering (runtime without DrawControlBox)
+		if not enabled then
+			SetDrawColor(0.33, 0.33, 0.33)
+		elseif mOver then
+			SetDrawColor(1, 1, 1)
+		elseif self.borderFunc then
+			local r, g, b = self.borderFunc()
+			SetDrawColor(r, g, b)
+		else
+			SetDrawColor(0.5, 0.5, 0.5)
+		end
+		DrawImage(nil, x, y, width, height)
+		if not enabled then
+			SetDrawColor(0, 0, 0)
+		elseif self.hasFocus or mOver then
+			if self.lineHeight then
+				SetDrawColor(0.1, 0.1, 0.1)
+			else
+				SetDrawColor(0.15, 0.15, 0.15)
+			end
+		else
+			SetDrawColor(0, 0, 0)
+		end
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	end
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
 	local textX = x + 2
 	local textY = y + 2
 	local textHeight = self.lineHeight or (height - 4)

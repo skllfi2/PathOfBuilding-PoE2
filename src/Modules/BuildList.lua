@@ -145,7 +145,22 @@ function listMode:OnFrame(inputEvents)
 	for id, event in ipairs(inputEvents) do
 		if event.type == "KeyDown" then
 			if event.key == "v" and IsKeyDown("CTRL") then
-				if self.controls.buildList.copyBuild then
+				-- Quick-import: if the clipboard contains a valid PoB code or URL, open the build mode with the code pre-filled.
+				-- Checked first; the existing build-file copy/cut logic below only handles a clipboard that does not look like a PoB code.
+				local quickImportHandled = false
+				local clip = Paste()
+				if clip and #clip > 2 then
+					local trimmed = clip:gsub("^%s+", ""):gsub("%s+$", "")
+					local looksLikePobCode = trimmed:match("^[A-Za-z0-9+/=_%-]+$") and #trimmed > 20
+					local looksLikeURL = trimmed:match("^https?://")
+					if looksLikePobCode or looksLikeURL then
+						-- Switch to a new build with the import tab; the code itself is passed via a global flag which Build.lua will pick up in Init.
+						main:SetMode("BUILD", false, "Imported build")
+						main.pendingClipboardImport = trimmed
+						quickImportHandled = true
+					end
+				end
+				if not quickImportHandled and self.controls.buildList.copyBuild then
 					local build = self.controls.buildList.copyBuild
 					if build.subPath ~= self.subPath then
 						if not buildListHelpers.CanMoveToSubPath(build, self.subPath) then
@@ -160,7 +175,7 @@ function listMode:OnFrame(inputEvents)
 						self.controls.buildList:RenameBuild(build, true)
 					end
 					self.controls.buildList.copyBuild = nil
-				elseif self.controls.buildList.cutBuild then
+				elseif not quickImportHandled and self.controls.buildList.cutBuild then
 					local build = self.controls.buildList.cutBuild
 					if build.subPath ~= self.subPath then
 						if not buildListHelpers.CanMoveToSubPath(build, self.subPath) then

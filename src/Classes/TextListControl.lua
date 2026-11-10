@@ -4,6 +4,8 @@
 -- Simple list control for displaying a block of text
 --
 ---@class TextListControl: Control, ControlHost
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 local TextListClass = newClass("TextListControl", "Control", "ControlHost")
 
 function TextListClass:TextListControl(anchor, rect, columns, list, sectionHeights)
@@ -36,10 +38,15 @@ function TextListClass:Draw(viewPort)
 		contentHeight = contentHeight + lineInfo.height
 	end
 	scrollBar:SetContentDimension(contentHeight, height - 4)
-	SetDrawColor(0.66, 0.66, 0.66)
-	DrawImage(nil, x, y, width, height)
-	SetDrawColor(0.05, 0.05, 0.05)
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
+	if DrawControlBox then
+		local tokens = ThemeFluent.card
+		DrawControlBox(x, y, width, height, tokens.radius, tokens.bg, tokens.border, 1, 0)
+	else
+		SetDrawColor(0.66, 0.66, 0.66)
+		DrawImage(nil, x, y, width, height)
+		SetDrawColor(0.05, 0.05, 0.05)
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
+	end
 	self:DrawControls(viewPort)
 	SetViewport(x + 2, y + 2, width - 20, height - 4)
 	for colIndex, colInfo in pairs(self.columns) do

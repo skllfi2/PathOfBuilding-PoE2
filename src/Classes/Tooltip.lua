@@ -7,10 +7,13 @@ local ipairs = ipairs
 local t_insert = table.insert
 local t_concat = table.concat
 local m_max = math.max
+local m_min = math.min
 local m_floor = math.floor
 local s_find = string.find
 local s_format = string.format
 local s_gmatch = string.gmatch
+
+local ItemComparison = LoadModule("Modules/ItemComparison")
 
 -- Constants
 
@@ -141,6 +144,8 @@ function TooltipClass:Clear(clearUpdateParams)
 	self.center = false
 	self.maxWidth = nil
 	self.minWidth = nil
+	self.maxCardWidth = nil
+	self.comparisonTooltip = nil
 	self.color = { 0.5, 0.3, 0 }
 	t_insert(self.blocks, { height = 0 })
 end
@@ -158,8 +163,13 @@ function TooltipClass:CheckForUpdate(...)
 			doUpdate = true
 		end
 	end
-	if doUpdate or self.updateParams.notSupportedModTooltips ~= main.notSupportedModTooltips then
+	if doUpdate
+		or self.updateParams.notSupportedModTooltips ~= main.notSupportedModTooltips
+		or self.updateParams.sideBySideItemComparison ~= main.sideBySideItemComparison
+		or self.updateParams.compactTooltips ~= main.compactTooltips then
 		self.updateParams.notSupportedModTooltips = main.notSupportedModTooltips
+		self.updateParams.sideBySideItemComparison = main.sideBySideItemComparison
+		self.updateParams.compactTooltips = main.compactTooltips
 		self:Clear()
 		return true
 	end
@@ -342,7 +352,26 @@ function TooltipClass:GetSize()
 		ttW = m_max(ttW, self.minWidth)
 	end
 
-	return ttW + H_PAD, ttH + V_PAD
+	ttW = ttW + H_PAD
+	if self.maxCardWidth then
+		ttW = m_min(ttW, self.maxCardWidth)
+	end
+	return ttW, ttH + V_PAD
+end
+
+-- Returns the actual outer width of this card. maxCardWidth is a hard limit:
+-- it includes the horizontal padding, the item header and any additional
+-- columns that the tooltip would otherwise create.
+function TooltipClass:GetCardWidth()
+	local ttW = self:GetSize()
+	if self.tooltipHeader and main.showFlavourText and self.lines[1] and self.lines[1].text then
+		local titleW = DrawStringWidth(self.lines[1].size, self.lines[1].font, self.lines[1].text)
+		ttW = m_max(ttW, titleW + 50)
+	end
+	if self.maxCardWidth then
+		ttW = m_min(ttW, self.maxCardWidth)
+	end
+	return ttW
 end
 
 function TooltipClass:GetDynamicSize(viewPort)
@@ -353,13 +382,29 @@ function TooltipClass:GetDynamicSize(viewPort)
 		self.titleYOffset = config.textYOffset or 0
 		staticttW = m_max(staticttW, DrawStringWidth(self.lines[1].size, self.lines[1].font, self.lines[1].text) + 50)
 	end
+	if self.maxCardWidth then
+		staticttW = m_min(staticttW, self.maxCardWidth)
+	end
 	local columns, ttH, _, extraColumnWidth = self:CalculateColumns(0, 0, staticttH, staticttW, viewPort)
 
 	-- ensure extra column width has sensible value
 	extraColumnWidth = (columns > 1 and extraColumnWidth > 0) and extraColumnWidth or staticttW
 	local ttW = staticttW + (m_max(columns - 1, 0) * extraColumnWidth)
+	local dynamicWidth = ttW + H_PAD
+	local dynamicHeight = ttH + V_PAD
 
-	return ttW + H_PAD, ttH + V_PAD
+	-- A tooltip with an attached side-by-side card needs room for the whole
+	-- pair. This is also used by ItemsTab to reserve the correct content
+	-- bounds before drawing the tooltip.
+	if self.comparisonTooltip and #self.comparisonTooltip.lines > 0 then
+		local primaryWidth = self:GetCardWidth()
+		local secondaryWidth = self.comparisonTooltip:GetCardWidth()
+		dynamicWidth = m_max(dynamicWidth, primaryWidth + ItemComparison.CARD_GAP + secondaryWidth)
+		local _, secondaryHeight = self.comparisonTooltip:GetDynamicSize(viewPort)
+		dynamicHeight = m_max(dynamicHeight, secondaryHeight)
+	end
+
+	return dynamicWidth, dynamicHeight
 end
 
 --- Calculates the column breaks, layout heights, and individual rendering instructions for tooltip lines.
@@ -443,7 +488,7 @@ function TooltipClass:CalculateColumns(ttY, ttX, ttH, ttW, viewPort)
 		-- Normal text handling (skip if first line handled)
 		if data.text and not data._handled then
 			-- Column break logic
-			if currentBlock ~= data.block and self.blocks[data.block].height + y > ttY + math.min(ttH, viewPort.height) then
+			if not self.maxCardWidth and currentBlock ~= data.block and self.blocks[data.block].height + y > ttY + math.min(ttH, viewPort.height) then
 				y = ttY + 2 * BORDER_WIDTH
 				x = ttX + ttW * columns
 				columns = columns + 1
@@ -473,7 +518,7 @@ function TooltipClass:CalculateColumns(ttY, ttX, ttH, ttW, viewPort)
 
 		elseif data.separatorImage and main.showFlavourText then
 			local sepSize = data.size or 10
-			if currentBlock ~= data.block and y + sepSize > ttY + math.min(ttH, viewPort.height) then
+			if not self.maxCardWidth and currentBlock ~= data.block and y + sepSize > ttY + math.min(ttH, viewPort.height) then
 				y = ttY + 2 * BORDER_WIDTH
 				x = ttX + ttW * columns
 				columns = columns + 1
@@ -545,14 +590,8 @@ function TooltipClass:Draw(x, y, w, h, viewPort)
 		return
 	end
 	local ttW, ttH = self:GetSize()
+	ttW = self:GetCardWidth()
 
-	-- ensure ttW is at least title width + 50 pixels, this fixes the header image for Magic items and some Tree passives.
-	if self.tooltipHeader and main.showFlavourText and self.lines[1] and self.lines[1].text then
-		local titleW = DrawStringWidth(self.lines[1].size, self.lines[1].font, self.lines[1].text)
-		if titleW + 50 > ttW then
-			ttW = titleW + 50
-		end
-	end
 	local config
 	if self.tooltipHeader and main.showFlavourText and self.lines[1] and self.lines[1].text then
 		local rarity = tostring(self.tooltipHeader):upper()
@@ -796,6 +835,22 @@ function TooltipClass:Draw(x, y, w, h, viewPort)
 	DrawImage(nil, ttX, ttY, totalDrawWidth, BORDER_WIDTH) -- top
 	DrawImage(nil, ttX, ttY + maxColumnHeight - BORDER_WIDTH, totalDrawWidth, BORDER_WIDTH) -- bottom
 
+	-- Draw a parallel comparison card when one was attached by the item
+	-- tooltip. The card is placed to the right of the primary card when it
+	-- fits; otherwise it is placed to the left. If neither side can contain
+	-- the complete pair without leaving the viewport, the secondary card is
+	-- omitted for this frame instead of overlapping the primary card.
+	local comparisonX
+	local comparisonWidth
+	local comparisonOnRight = false
+	if self.comparisonTooltip and #self.comparisonTooltip.lines > 0 then
+		comparisonWidth = self.comparisonTooltip:GetCardWidth()
+		comparisonX, comparisonOnRight = ItemComparison.GetSideBySideLayout(ttX, totalDrawWidth, comparisonWidth, viewPort)
+		if comparisonX then
+			self.comparisonTooltip:Draw(comparisonX, ttY, nil, nil, viewPort)
+		end
+	end
+
 	-- draw child tooltips for item skills. these are placed directly to the right of the main
 	-- tooltip, growing downwards, unless they would go outside the viewport, in which case they
 	-- will draw over the main tooltip
@@ -811,10 +866,11 @@ function TooltipClass:Draw(x, y, w, h, viewPort)
 		local yOffset = math.min(0, viewPort.height - totalH - ttY)
 		-- movement to the left happens individually. i.e. the right edges are aligned
 		local yPos = math.max(ttY + yOffset, viewPort.y)
+		local childBaseX = comparisonOnRight and (comparisonX + comparisonWidth) or (ttX + totalDrawWidth)
 		for _, tt in ipairs(self.childTooltips) do
 			local childW, childH = tt:GetSize(viewPort)
-			local furthestAllowedX = viewPort.width - childW / 2
-			tt:Draw(math.min(ttX + ttW, furthestAllowedX), yPos, nil, nil,
+			local furthestAllowedX = viewPort.x + viewPort.width - childW
+			tt:Draw(math.min(childBaseX, furthestAllowedX), yPos, nil, nil,
 				viewPort)
 			-- next tooltip goes below this one
 			yPos = yPos + childH

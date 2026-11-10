@@ -7,6 +7,8 @@ local t_insert = table.insert
 local m_max = math.max
 local m_min = math.min
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 ---@class CalcSectionControl: Control, ControlHost
 local CalcSectionClass = newClass("CalcSectionControl", "Control", "ControlHost")
 
@@ -249,10 +251,16 @@ function CalcSectionClass:Draw(viewPort, noTooltip)
 	local actor = self.calcsTab.input.showMinion and self.calcsTab.calcsEnv.minion or self.calcsTab.calcsEnv.player
 	-- Draw border and background
 	SetDrawLayer(nil, -10)
-	SetDrawColor(self.colour)
-	DrawImage(nil, x, y, width, height)
-	SetDrawColor(0.10, 0.10, 0.10)
-	DrawImage(nil, x + 2, y + 2, width - 4, height - 4)
+	if DrawControlBox then
+		-- Fluent: rounded card with a subtle stroke, no shadow (sections stack)
+		local tokens = ThemeFluent.calcSection
+		DrawControlBox(x, y, width, height, tokens.radius, tokens.bg, tokens.border, tokens.borderWidth, tokens.shadowBlur)
+	else
+		SetDrawColor(self.colour)
+		DrawImage(nil, x, y, width, height)
+		SetDrawColor(0.10, 0.10, 0.10)
+		DrawImage(nil, x + 2, y + 2, width - 4, height - 4)
+	end
 
 	self:DrawContent(x, y, width, actor, viewPort, false, noTooltip)
 end
@@ -453,18 +461,28 @@ function CalcSectionClass:DrawOverlay(viewPort, inputEvents)
 	SetDrawLayer(12)
 
 	-- Draw background
-	SetDrawColor(0.08, 0.08, 0.08, 0.95)
-	DrawImage(nil, x, y, overlayWidth, totalHeight)
+	if DrawControlBox then
+		-- Fluent: floating card; the border turns accent while dragging
+		local tokens = ThemeFluent.calcSection
+		DrawControlBox(x, y, overlayWidth, totalHeight, tokens.overlayRadius, tokens.overlayBg, self.dragging and tokens.overlayBorderDrag or tokens.overlayBorder, tokens.borderWidth, tokens.overlayShadow)
+	else
+		SetDrawColor(0.08, 0.08, 0.08, 0.95)
+		DrawImage(nil, x, y, overlayWidth, totalHeight)
 
-	-- Draw border
-	SetDrawColor(self.colour)
-	DrawImage(nil, x, y, overlayWidth, 1)
-	DrawImage(nil, x, y + totalHeight - 1, overlayWidth, 1)
-	DrawImage(nil, x, y, 1, totalHeight)
-	DrawImage(nil, x + overlayWidth - 1, y, 1, totalHeight)
+		-- Draw border
+		SetDrawColor(self.colour)
+		DrawImage(nil, x, y, overlayWidth, 1)
+		DrawImage(nil, x, y + totalHeight - 1, overlayWidth, 1)
+		DrawImage(nil, x, y, 1, totalHeight)
+		DrawImage(nil, x + overlayWidth - 1, y, 1, totalHeight)
+	end
 
 	-- Draw header
-	SetDrawColor(0.18, 0.18, 0.18)
+	if DrawControlBox then
+		SetDrawColor(unpack(ThemeFluent.calcSection.overlayHeaderBg))
+	else
+		SetDrawColor(0.18, 0.18, 0.18)
+	end
 	DrawImage(nil, x + 1, y + 1, overlayWidth - 2, 22)
 	SetDrawColor(1, 1, 1)
 	local cbx = x + overlayWidth - 16
@@ -473,7 +491,11 @@ function CalcSectionClass:DrawOverlay(viewPort, inputEvents)
 	DrawImageQuad(nil, cbx + 11, cby + 3, cbx + 13, cby + 5, cbx + 5, cby + 13, cbx + 3, cby + 11)
 
 	-- Separator
-	SetDrawColor(self.colour)
+	if DrawControlBox then
+		SetDrawColor(unpack(ThemeFluent.calcSection.overlaySeparator))
+	else
+		SetDrawColor(self.colour)
+	end
 	DrawImage(nil, x + 2, y + 24, overlayWidth - 4, 1)
 
 	-- Draw content
@@ -503,11 +525,13 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 	local lineY = startLineY
 	local primary = true
 	local enabled = isOverlay and (actor and self.calcsTab:CheckFlag(self)) or self.enabled
+	-- Fluent thins the group-colour frame lines to hairlines; legacy keeps 2px
+	local lineWeight = DrawControlBox and 1 or 2
 
 	for _, subSec in ipairs(self.subSection) do
 		-- Top border
 		SetDrawColor(self.colour)
-		DrawImage(nil, drawX + 2, lineY, drawWidth - 4, 2)
+		DrawImage(nil, drawX + 2, lineY, drawWidth - 4, lineWeight)
 
 		-- Label
 		if not enabled then
@@ -528,7 +552,7 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 
 		-- Bottom border
 		SetDrawColor(self.colour)
-		DrawImage(nil, drawX + 2, lineY + 20, drawWidth - 4, 2)
+		DrawImage(nil, drawX + 2, lineY + 20, drawWidth - 4, lineWeight)
 
 		-- Toggle
 		if isOverlay then
@@ -574,7 +598,7 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 						local cellH = colData.height or 18
 
 						SetDrawColor(self.colour)
-						DrawImage(nil, cellX, lineY + 2, 2, cellH)
+						DrawImage(nil, cellX, lineY + 2, lineWeight, cellH)
 
 						if colData.format and (isOverlay or self.calcsTab:CheckFlag(colData)) then
 							if (isOverlay and actor and self.calcsTab:CheckFlag(colData)) or not isOverlay then
@@ -587,10 +611,22 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 								end
 
 								if not isOverlay and self.calcsTab.displayData == colData then
-									SetDrawColor(0.25, 1, 0.25)
-									DrawImage(nil, cellX + 2, cellY, cellW - 2, cellH)
-									SetDrawColor(rowData.bgCol or "^0")
-									DrawImage(nil, cellX + 3, cellY + 1, cellW - 4, cellH - 2)
+									if DrawControlBox then
+										-- WinUI: rounded hover veil over the data-driven tint;
+										-- a pinned stat gets a gold veil plus an accent bar
+										local tokens = ThemeFluent.calcSection
+										local pinned = self.calcsTab.displayPinned
+										DrawControlBox(cellX + 2, cellY, cellW - 2, cellH, tokens.cellRadius, pinned and tokens.cellSelectedBg or tokens.cellHoverBg, nil, 0, 0)
+										if pinned then
+											SetDrawColor(unpack(tokens.cellIndicator))
+											DrawImage(nil, cellX + 2, cellY + 2, tokens.cellIndicatorWidth, cellH - 4)
+										end
+									else
+										SetDrawColor(0.25, 1, 0.25)
+										DrawImage(nil, cellX + 2, cellY, cellW - 2, cellH)
+										SetDrawColor(rowData.bgCol or "^0")
+										DrawImage(nil, cellX + 3, cellY + 1, cellW - 4, cellH - 2)
+									end
 								else
 									SetDrawColor(rowData.bgCol or "^0")
 									DrawImage(nil, cellX + 2, lineY + 2, cellW - 2, 18)

@@ -4,6 +4,8 @@
 -- Section box with label
 --
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 ---@class SectionControl: Control
 local SectionClass = newClass("SectionControl", "Control")
 
@@ -17,17 +19,31 @@ function SectionClass:Draw()
 	local x, y = self:GetPos()
 	local width, height = self:GetSize()
 	SetDrawLayer(nil, -10)
-	SetDrawColor(0.66, 0.66, 0.66)
-	DrawImage(nil, x, y, width, height)
-	SetDrawColor(0.1, 0.1, 0.1)
-	DrawImage(nil, x + 2, y + 2, width - 4, height - 4)
+	if DrawControlBox then
+		-- Fluent: rounded card with a subtle stroke, no shadow (sections sit flush)
+		local tokens = ThemeFluent.section
+		DrawControlBox(x, y, width, height, tokens.radius, tokens.bg, tokens.border, tokens.borderWidth, tokens.shadowBlur)
+	else
+		SetDrawColor(0.66, 0.66, 0.66)
+		DrawImage(nil, x, y, width, height)
+		SetDrawColor(0.1, 0.1, 0.1)
+		DrawImage(nil, x + 2, y + 2, width - 4, height - 4)
+	end
 	SetDrawLayer(nil, 0)
 	local label = self:GetProperty("label")
 	local labelWidth = DrawStringWidth(14, "VAR", label)
-	SetDrawColor(0.66, 0.66, 0.66)
-	DrawImage(nil, x + 6, y - 8, labelWidth + 6, 18)
-	SetDrawColor(0, 0, 0)
-	DrawImage(nil, x + 7, y - 7, labelWidth + 4, 16)
-	SetDrawColor(1, 1, 1)
+	if DrawControlBox then
+		-- Fluent: label plate blends into the card and hides the border under it
+		local tokens = ThemeFluent.section
+		SetDrawColor(unpack(tokens.labelBg))
+		DrawImage(nil, x + 6, y - 8, labelWidth + 6, 18)
+		SetDrawColor(unpack(tokens.labelText))
+	else
+		SetDrawColor(0.66, 0.66, 0.66)
+		DrawImage(nil, x + 6, y - 8, labelWidth + 6, 18)
+		SetDrawColor(0, 0, 0)
+		DrawImage(nil, x + 7, y - 7, labelWidth + 4, 16)
+		SetDrawColor(1, 1, 1)
+	end
 	DrawString(x + 9, y - 6, "LEFT", 14, "VAR", label)
 end

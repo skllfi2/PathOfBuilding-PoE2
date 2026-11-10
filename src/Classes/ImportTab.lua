@@ -591,11 +591,30 @@ function ImportTabClass:Save(xml)
 	xml.attrib.importLink = (xml.attrib.importLink and xml.attrib.importLink:len() < 100) and xml.attrib.importLink or nil
 end
 
+function ImportTabClass:QuickImportFromClipboard()
+	local clip = Paste()
+	if not clip or #clip < 3 then return false end
+	local trimmed = clip:gsub("^%s+", ""):gsub("%s+$", "")
+	self.controls.importCodeIn:SetText(trimmed, true)
+	return self.importCodeValid
+end
+
 function ImportTabClass:Draw(viewPort, inputEvents)
 	self.x = viewPort.x
 	self.y = viewPort.y
 	self.width = viewPort.width
 	self.height = viewPort.height
+
+	-- Quick-import: Ctrl+V while the import code field is not focused fills it from the clipboard.
+	-- Skipped if another EditControl holds focus so its normal paste is not hijacked.
+	for id, event in ipairs(inputEvents) do
+		if event.type == "KeyDown" and event.key == "v" and IsKeyDown("CTRL") then
+			if not self.selControl or (self.selControl ~= self.controls.importCodeIn
+				and self.selControl._className ~= "EditControl" and self.selControl._className ~= "ResizableEditControl") then
+				self:QuickImportFromClipboard()
+			end
+		end
+	end
 
 	self:ProcessControlsInput(inputEvents, viewPort)
 

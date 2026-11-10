@@ -7,6 +7,8 @@ local m_min = math.min
 local m_max = math.max
 local m_ceil = math.ceil
 
+local ThemeFluent = LoadModule("Modules/ThemeFluent")
+
 ---@class SliderControl: Control, TooltipHost
 local SliderClass = newClass("SliderControl", "Control", "TooltipHost")
 
@@ -88,34 +90,63 @@ function SliderClass:Draw(viewPort)
 		self:SetValFromKnobX((cursorX - self.dragCX) + self.dragKnobX)
 	end
 	local mOver, mOverComp = self:IsMouseOver()
-	if not enabled then
-		SetDrawColor(0.33, 0.33, 0.33)
-	elseif self.dragging or mOver then
-		SetDrawColor(1, 1, 1)
-	else
-		SetDrawColor(0.5, 0.5, 0.5)
-	end
-	DrawImage(nil, x, y, width, height)
-	SetDrawColor(0, 0, 0)
-	DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
-	if enabled then
-		if self.divCount then
-			SetDrawColor(0.33, 0.33, 0.33)
-			for d = 0, knobTravel + 0.5, knobTravel / self.divCount do
-				DrawImage(nil, x + self.knobSize/2 + d, y + 1, 2, height - 2)
+	local knobX = self:GetKnobXForVal()
+	if DrawControlBox then
+		-- Fluent: thin dark track, accent fill up to the knob, light round knob
+		local tokens = ThemeFluent.slider
+		if not enabled then
+			DrawControlBox(x, y, width, height, tokens.radius, tokens.trackDisabledBg, tokens.trackDisabledBorder, tokens.borderWidth, tokens.shadowBlur)
+		else
+			DrawControlBox(x, y, width, height, tokens.radius, tokens.trackBg, (self.dragging or mOver) and tokens.trackBorderHover or tokens.trackBorder, tokens.borderWidth, tokens.shadowBlur)
+			local fillWidth = m_min(knobX + self.knobSize / 2, width - 2)
+			if fillWidth > 0 then
+				DrawControlBox(x + 1, y + 1, fillWidth, height - 2, tokens.radius, tokens.trackFill, nil, 0, 0)
 			end
 		end
-		if self.dragging or mOverComp == "KNOB" then
+	else
+		if not enabled then
+			SetDrawColor(0.33, 0.33, 0.33)
+		elseif self.dragging or mOver then
 			SetDrawColor(1, 1, 1)
 		else
 			SetDrawColor(0.5, 0.5, 0.5)
 		end
-		local knobX = self:GetKnobXForVal()
+		DrawImage(nil, x, y, width, height)
+		SetDrawColor(0, 0, 0)
+		DrawImage(nil, x + 1, y + 1, width - 2, height - 2)
+	end
+	if enabled then
+		if self.divCount then
+			if DrawControlBox then
+				SetDrawColor(unpack(ThemeFluent.slider.tick))
+			else
+				SetDrawColor(0.33, 0.33, 0.33)
+			end
+			for d = 0, knobTravel + 0.5, knobTravel / self.divCount do
+				DrawImage(nil, x + self.knobSize/2 + d, y + 1, 2, height - 2)
+			end
+		end
 		if self.divCount then
 			local arrowHeight = self.knobSize/2
+			local arrowColor
+			if DrawControlBox then
+				local tokens = ThemeFluent.slider
+				arrowColor = (self.dragging or mOverComp == "KNOB") and tokens.arrowActive or tokens.arrow
+			else
+				arrowColor = (self.dragging or mOverComp == "KNOB") and { 1, 1, 1 } or { 0.5, 0.5, 0.5 }
+			end
+			SetDrawColor(unpack(arrowColor))
 			main:DrawArrow(x + 1 + knobX + self.knobSize/2, y + height/2 - arrowHeight/2, self.knobSize, arrowHeight, "UP")
 			main:DrawArrow(x + 1 + knobX + self.knobSize/2, y + height/2 + arrowHeight/2, self.knobSize, arrowHeight, "DOWN")
+		elseif DrawControlBox then
+			local tokens = ThemeFluent.slider
+			DrawControlBox(x + 2 + knobX, y + 2, self.knobSize - 2, self.knobSize - 2, m_min(16, (self.knobSize - 2) / 2), tokens.knob, (self.dragging or mOverComp == "KNOB") and tokens.knobBorderActive or tokens.knobBorder, 1, 0)
 		else
+			if self.dragging or mOverComp == "KNOB" then
+				SetDrawColor(1, 1, 1)
+			else
+				SetDrawColor(0.5, 0.5, 0.5)
+			end
 			DrawImage(nil, x + 2 + knobX, y + 2, self.knobSize - 2, self.knobSize - 2)
 		end
 	end

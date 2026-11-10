@@ -17,6 +17,7 @@ local m_modf = math.modf
 local buySimilar = LoadModule("Classes/CompareBuySimilar")
 
 local gemTooltip = LoadModule("Classes/GemTooltip")
+local ItemComparison = LoadModule("Modules/ItemComparison")
 local rarityDropList = {
 	{ label = colorCodes.NORMAL.."Normal", rarity = "NORMAL" },
 	{ label = colorCodes.MAGIC.."Magic", rarity = "MAGIC" },
@@ -1449,11 +1450,21 @@ function ItemsTabClass:Draw(viewPort, inputEvents)
 	self.controls.scrollBarV.height = viewPort.height - 18
 	self.controls.scrollBarV.x = viewPort.x + viewPort.width - 18
 	self.controls.scrollBarV.y = viewPort.y
+	-- The persistent display-item tooltip is not rebuilt by hover
+	-- CheckForUpdate paths, so refresh it when either tooltip option changes.
+	local tooltipOptionState = self.displayItemTooltipOptionState
+	if self.displayItem and (not tooltipOptionState
+		or tooltipOptionState.compactTooltips ~= main.compactTooltips
+		or tooltipOptionState.sideBySideItemComparison ~= main.sideBySideItemComparison) then
+		self:UpdateDisplayItemTooltip()
+	end
 	do
 		local maxY = select(2, self.lastSlot:GetPos()) + 24
 		local maxX = self.anchorDisplayItem:GetPos() + 462
 		if self.displayItem then
 			local x, y = self.controls.displayItemTooltipAnchor:GetPos()
+			-- GetDynamicSize includes the attached side-by-side card (when one
+			-- is present), so this reserves the complete comparison pair.
 			local ttW, ttH = self.displayItemTooltip:GetDynamicSize(viewPort)
 			maxY = m_max(maxY, y + ttH + 4)
 			maxX = m_max(maxX, x + ttW + 80)
@@ -2163,6 +2174,10 @@ function ItemsTabClass:UpdateDisplayItemTooltip()
 	self.displayItemTooltip:Clear()
 	self:AddItemTooltip(self.displayItemTooltip, self.displayItem)
 	self.displayItemTooltip.center = true
+	self.displayItemTooltipOptionState = {
+		compactTooltips = main.compactTooltips,
+		sideBySideItemComparison = main.sideBySideItemComparison,
+	}
 end
 
 function ItemsTabClass:ToggleDisplayItemModLine(modLine)
@@ -3702,19 +3717,69 @@ function ItemsTabClass:FormatItemSource(text)
 			   :gsub("prophecy{([^}]+)}",colorCodes.PROPHECY.."%1"..colorCodes.SOURCE)
 end
 
-function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
+-- Adds the currently equipped item for the selected comparison slot as a
+-- parallel side-by-side card. The returned slot is also used for the stat
+-- deltas, so SHIFT always switches both the card and the comparison output.
+function ItemsTabClass:AddSideBySideComparisonTooltip(tooltip, item, slot, isCompact)
+	if not main.sideBySideItemComparison then
+		return nil
+	end
+	local compareSlot = ItemComparison.PickComparisonSlot(self, item, slot, isCompact, IsKeyDown("SHIFT"))
+	if not compareSlot then
+		return nil
+	end
+	local equippedItem = self.items[compareSlot.selItemId]
+	if not equippedItem or equippedItem == item then
+		return compareSlot
+	end
+
+	local comparisonTooltip = new("Tooltip"):Tooltip()
+	local slotLabel = compareSlot.slotName
+	self:AddItemTooltip(comparisonTooltip, equippedItem, compareSlot, nil, ItemComparison.MAX_TOOLTIP_WIDTH, {
+		skipComparison = true,
+		skipStatDifferences = true,
+		skipChildTooltips = true,
+		cardWidthLimit = ItemComparison.MAX_TOOLTIP_WIDTH,
+		comparisonLabel = "^7Currently Equipped (" .. slotLabel .. ")",
+	})
+	tooltip.comparisonTooltip = comparisonTooltip
+	return compareSlot
+end
+
+function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, options)
+	options = options or { }
+	local isCompact = main.compactTooltips
+	if IsKeyDown("ALT") then
+		isCompact = not isCompact -- holding ALT temporarily inverts compact mode
+	end
 	local fontSizeSmall = main.showFlavourText and 16 or 14
 	local fontSizeBig = main.showFlavourText and 18 or 16
 	local fontSizeTitle = main.showFlavourText and 22 or 20
+	-- Compact mode: shrink the base font sizes
+	if isCompact then
+		fontSizeSmall, fontSizeBig, fontSizeTitle = 13, 15, 18
+	end
+	-- Compact mode: decorative separators lose their extra height
+	local sepGapDefault = isCompact and 4 or 10
+	local sepGapLarge = isCompact and 6 or 14
+	local sepGapHeader = isCompact and 8 or 30
 	local rarityCode = colorCodes[item.rarity]
-	tooltip.maxWidth = m_min(maxWidth or 600, 600) -- Cap very long lines. Can use a narrower width for small viewports
+	local sideBySideEnabled = main.sideBySideItemComparison and not options.skipComparison
+	local cardWidthLimit = options.cardWidthLimit or (sideBySideEnabled and ItemComparison.MAX_TOOLTIP_WIDTH or nil)
+	local tooltipMaxWidth = maxWidth or 600
+	if cardWidthLimit then
+		tooltipMaxWidth = m_min(tooltipMaxWidth, cardWidthLimit)
+	end
+	tooltip.maxWidth = m_min(tooltipMaxWidth, 600) -- Cap very long lines. Can use a narrower width for small viewports
+	tooltip.maxCardWidth = cardWidthLimit
+	tooltip.comparisonTooltip = nil
 	tooltip.tooltipHeader = item.rarity
 	tooltip.center = true
 	tooltip.color = rarityCode
 	-- Shared items can use old base names that no longer exist. Add a tooltip so they can be copied or removed without causing a crash.
 	if not item.base or not item.baseName then
 		tooltip:AddLine(fontSizeTitle, rarityCode..(item.title or item.name or "Unknown Item"), "FONTIN SC")
-		tooltip:AddSeparator(30)
+		tooltip:AddSeparator(sepGapHeader)
 		tooltip:AddLine(fontSizeTitle, colorCodes.NEGATIVE.."Item base is not supported by the current version.", "FONTIN SC")
 		return
 	end
@@ -3725,8 +3790,11 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 	else
 		tooltip:AddLine(fontSizeTitle, rarityCode..item.namePrefix..item.baseName:gsub(" %(.+%)","")..item.nameSuffix, "FONTIN SC")
 	end
+	if options.comparisonLabel then
+		tooltip:AddLine(fontSizeBig, options.comparisonLabel, "FONTIN SC")
+	end
 	tooltip.runicItem = item.runicItem
-	tooltip:AddSeparator(10)
+	tooltip:AddSeparator(sepGapDefault)
 
 	-- Special fields for database items
 	if dbMode then
@@ -3769,7 +3837,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 				tooltip:AddLine(fontSizeBig, colorCodes.SOURCE..self:FormatItemSource(path), "FONTIN SC")
 			end
 		end
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 	end
 
 	local base = item.base
@@ -3932,7 +4000,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		for _, modLine in pairs(item.buffModLines) do
 			if modLine.extra then
 				local line = colorCodes.UNSUPPORTED..modLine.line
-				line = main.notSupportedModTooltips and (line .. main.notSupportedTooltipText) or line
+				line = (main.notSupportedModTooltips and not isCompact) and (line .. main.notSupportedTooltipText) or line
 				tooltip:AddLine(fontSizeBig, line, "FONTIN SC")
 			else
 				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..modLine.line, "FONTIN SC")
@@ -3950,7 +4018,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		for _, modLine in pairs(item.buffModLines) do
 			if modLine.extra then
 				local line = colorCodes.UNSUPPORTED..modLine.line
-				line = main.notSupportedModTooltips and (line .. main.notSupportedTooltipText) or line
+				line = (main.notSupportedModTooltips and not isCompact) and (line .. main.notSupportedTooltipText) or line
 				tooltip:AddLine(fontSizeBig, line, "FONTIN SC")
 			else
 				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..modLine.line, "FONTIN SC")
@@ -3984,7 +4052,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 
 	if item.catalyst and item.catalyst > 0 and item.catalyst <= #catalystQualityFormat and item.catalystQuality and item.catalystQuality > 0 then
 		tooltip:AddLine(fontSizeBig, s_format(catalystQualityFormat[item.catalyst], item.catalystQuality), "FONTIN SC")
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 	end
 
 	if item.itemSocketCount > 0 then
@@ -4003,11 +4071,11 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		socketString = socketString:gsub(" $", "")
 		tooltip:AddLine(fontSizeBig, "^x7F7F7FSockets: " .. socketString, "FONTIN SC")
 	end
-	tooltip:AddSeparator(10)
+	tooltip:AddSeparator(sepGapDefault)
 
 	if item.talismanTier then
 		tooltip:AddLine(fontSizeBig, "^x7F7F7FTalisman Tier ^xFFFFFF"..item.talismanTier, "FONTIN SC")
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 	end
 
 	-- Requirements
@@ -4027,9 +4095,9 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 			extraTooltip = "^x7F7F7FSocketed Jewel Effect: "
 			if jewelEffect > 0 then
 				extraTooltip = extraTooltip .. s_format(colorCodes.MAGIC.."+%d%%", jewelEffect)
-				tooltip:AddSeparator(10)
+				tooltip:AddSeparator(sepGapDefault)
 				tooltip:AddLine(fontSizeBig, extraTooltip, "FONTIN SC")
-				tooltip:AddSeparator(10)
+				tooltip:AddSeparator(sepGapDefault)
 			end
 
 			scale = scale + (jewelEffect / 100)
@@ -4087,18 +4155,18 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 						end
 						-- Add separator only for anoints
 						if item.implicitModLines then
-							tooltip:AddSeparator(10)
+							tooltip:AddSeparator(sepGapDefault)
 						end
 					end
 				end
 			end
-			tooltip:AddSeparator(10)
+			tooltip:AddSeparator(sepGapDefault)
 		end
 	end
 
 	-- Cluster jewel notables/keystone
 	if item.clusterJewel then
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 		if #item.jewelData.clusterJewelNotables > 0 then
 			for _, name in ipairs(item.jewelData.clusterJewelNotables) do
 				local node = self.build.spec.tree.clusterNodeMap[name]
@@ -4118,13 +4186,13 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 				end
 			end
 		end
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 	end
 
 	-- Corrupted item label
 	if item.corrupted or item.mirrored or item.doubleCorrupted or item.sanctified then
 		if #item.explicitModLines == 0 then
-			tooltip:AddSeparator(10)
+			tooltip:AddSeparator(sepGapDefault)
 		end
 		if item.mirrored then
 			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE.."Mirrored", "FONTIN SC")
@@ -4137,15 +4205,15 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		elseif item.corrupted then
 			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE.."Corrupted", "FONTIN SC")
 		end
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 	end
 
-	-- Show flavour text:
-	if flavourText then
+	-- Show flavour text (suppressed in compact mode):
+	if flavourText and not isCompact then
 		for _, line in ipairs(flavourText) do
 			tooltip:AddLine(fontSizeBig, colorCodes.UNIQUE .. line, "FONTIN SC ITALIC")
 		end
-		tooltip:AddSeparator(14)
+		tooltip:AddSeparator(sepGapLarge)
 	end
 
 	-- Skill tooltip. We add child tooltips, which will be rendered to the right of the main
@@ -4158,12 +4226,14 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		tt:Clear()
 		tt.maxWidth = gemMaxWidth
 	end
-	if item.grantedSkills and #item.grantedSkills > 0 then
-		tooltip:AddSeparator(14)
-		tooltip:AddLine(14,
-			colorCodes.TIP ..
-			"Tip: Hold Shift to display a tooltip for the granted skill" ..
-			(#item.grantedSkills > 1 and "s" or "") .. ".")
+	if ItemComparison.ShouldBuildChildTooltips(item, options) then
+		tooltip:AddSeparator(sepGapLarge)
+		if not isCompact then
+			tooltip:AddLine(14,
+				colorCodes.TIP ..
+				"Tip: Hold Shift to display a tooltip for the granted skill" ..
+				(#item.grantedSkills > 1 and "s" or "") .. ".")
+		end
 		for i, itemSkill in ipairs(item.grantedSkills) do
 			if not tooltip.childTooltips[i] then
 				tooltip.childTooltips[i] = new("Tooltip"):Tooltip()
@@ -4188,14 +4258,28 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 			end
 		end
 	end
+	-- Side-by-side card for the equipped item in the selected comparison slot.
+	-- This is intentionally built before the stat-difference section so the
+	-- option also works when stat differences are disabled.
+	local sideBySideSlot
+	if not options.skipComparison then
+		sideBySideSlot = self:AddSideBySideComparisonTooltip(tooltip, item, slot, isCompact)
+	end
+	if options.skipStatDifferences then
+		return
+	end
 	-- Stat differences
 	local itemTabHint = self.build.viewMode == "ITEMS" and "" or " in the Items tab"
 	if not self.showStatDifferences then
-		tooltip:AddSeparator(14)
+		tooltip:AddSeparator(sepGapLarge)
 		tooltip:AddLine(14, colorCodes.TIP.."Tip: Press Ctrl+D"..itemTabHint.." to enable the display of stat differences.")
 		return
 	end
 	local calcFunc, calcBase = self.build.calcsTab:GetMiscCalculator()
+	-- Flasks and charms compare activation state (see the calc setup), not an
+	-- equipment-slot replacement. The Side-by-Side selection controls the
+	-- parallel equipped card, but it must not change this existing semantics.
+	local activationMode = ItemComparison.GetActivationComparisonMode(base)
 	if base.flask then
 		-- Special handling for flasks
 		local stats = { }
@@ -4379,7 +4463,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 				tooltip:AddLine(14, stat)
 			end
 		end
-		local output = calcFunc({ toggleFlask = item })
+		local output = calcFunc({ [activationMode] = item })
 		local header
 		if self.build.calcsTab.mainEnv.flasks[item] then
 			header = "^7Deactivating this flask will give you:"
@@ -4414,7 +4498,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 				tooltip:AddLine(14, stat)
 			end
 		end
-		local output = calcFunc({ toggleCharm = item })
+		local output = calcFunc({ [activationMode] = item })
 		local header
 		if self.build.calcsTab.mainEnv.charms[item] then
 			header = "^7Deactivating this charm will give you:"
@@ -4431,6 +4515,65 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 			if self:IsItemValidForSlot(item, slotName) and not slot.inactive and (not slot.weaponSet or slot.weaponSet == weaponSet) and (slot.weaponSet or slot.shown()) then
 				t_insert(compareSlots, slot)
 			end
+		end
+
+		-- Compact mode + SHIFT: compare against the alternate slot of the pair
+		-- (Ring 1 <-> Ring 2, Main Hand <-> Off Hand) instead of both/all slots.
+		-- Side-by-side mode has already selected the exact slot used by the
+		-- parallel card, so it must not be replaced by the broader family list.
+		if isCompact and not sideBySideSlot then
+			local shiftHeld = IsKeyDown("SHIFT")
+			local slotObj = (slot and type(slot) ~= "string") and slot or (slot and self.slots[slot])
+			local hoveredSlotName = slotObj and slotObj.slotName
+
+			local families = { }
+			local familyOrder = { }
+			for _, compareSlot in ipairs(compareSlots) do
+				-- Only non-Swap members participate; the Swap variants follow the weapon set
+				if not compareSlot.slotName:match(" Swap$") then
+					local family = compareSlot.slotName:gsub(" Swap$", ""):gsub(" %d$", "")
+					if not families[family] then
+						families[family] = { }
+						t_insert(familyOrder, family)
+					end
+					t_insert(families[family], compareSlot)
+				end
+			end
+			local picked = { }
+			for _, family in ipairs(familyOrder) do
+				local familySlots = families[family]
+				table.sort(familySlots, function(a, b) return a.slotName < b.slotName end)
+				if #familySlots > 1 then
+					if hoveredSlotName then
+						local hoveredIdx = 1
+						for idx, s in ipairs(familySlots) do
+							if s.slotName == hoveredSlotName then
+								hoveredIdx = idx
+								break
+							end
+						end
+						if shiftHeld then
+							local altIdx = (hoveredIdx == 1) and 2 or 1
+							t_insert(picked, familySlots[altIdx] or familySlots[1])
+						else
+							t_insert(picked, familySlots[hoveredIdx])
+						end
+					else
+						-- Hovering in item list / DB: Slot 1 without SHIFT, Slot 2 with SHIFT
+						local targetIdx = shiftHeld and 2 or 1
+						t_insert(picked, familySlots[targetIdx] or familySlots[1])
+					end
+				else
+					t_insert(picked, familySlots[1])
+				end
+			end
+			table.sort(picked, function(a, b) return a.slotName < b.slotName end)
+			compareSlots = picked
+		end
+		-- Keep the stat deltas and the parallel equipped card in sync. The
+		-- compact SHIFT selection is resolved by AddSideBySideComparisonTooltip.
+		if sideBySideSlot then
+			compareSlots = { sideBySideSlot }
 		end
 
 		tooltip:AddLine(14, colorCodes.TIP .. "Tip: Press Ctrl+D"..itemTabHint.." to disable the display of stat differences.")
@@ -4459,11 +4602,14 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 		-- tooltips only for affected slots" checked, we can just compare that
 		-- one slot
 		if main.slotOnlyTooltips and slot then
-			slot = type(slot) ~= "string" and slot or self.slots[slot]
-			if slot and slot.weaponSet then
-				slot = self.slots[(slot.slotName:gsub(" Swap", ""):gsub("^Weapon %d", weaponSet == 2 and "%0 Swap" or "%0"))]
+			local compareSlot = sideBySideSlot
+			if not compareSlot then
+				compareSlot = type(slot) ~= "string" and slot or self.slots[slot]
+				if compareSlot and compareSlot.weaponSet then
+					compareSlot = self.slots[(compareSlot.slotName:gsub(" Swap", ""):gsub("^Weapon %d", weaponSet == 2 and "%0 Swap" or "%0"))]
+				end
 			end
-			if slot then addCompareForSlot(slot) end
+			if compareSlot then addCompareForSlot(compareSlot) end
 			return
 		end
 
@@ -4539,7 +4685,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth)
 	end
 	if launch.devModeAlt then
 		-- Modifier debugging info
-		tooltip:AddSeparator(10)
+		tooltip:AddSeparator(sepGapDefault)
 		for _, mod in ipairs(modList) do
 			tooltip:AddLine(fontSizeSmall, "^7"..modLib.formatMod(mod), "VAR")
 		end

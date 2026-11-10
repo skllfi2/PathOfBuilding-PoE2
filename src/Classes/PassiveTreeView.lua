@@ -1940,7 +1940,7 @@ function PassiveTreeViewClass:AddNodeTooltip(tooltip, node, build, incSmallPassi
 		-- Jewel socket with a jewel in it, show the jewel tooltip instead of the node tooltip
 		local socket, jewel = build.itemsTab:GetSocketAndJewelForNodeID(node.id)
 		if jewel then
-			build.itemsTab:AddItemTooltip(tooltip, jewel, { nodeId = node.id })
+			build.itemsTab:AddItemTooltip(tooltip, jewel, socket)
 			tooltip:AddSeparator(14)
 		end
 
