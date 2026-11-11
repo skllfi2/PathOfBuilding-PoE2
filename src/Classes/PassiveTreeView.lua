@@ -18,6 +18,12 @@ local b_rshift = bit.rshift
 local unseenPathHover = false
 
 local gemTooltip = LoadModule("Classes/GemTooltip")
+local TreeNodesRU = LoadModule("Data/TreeNodesRU")
+local utf8 = require('lua-utf8')
+local function toLowerStr(s)
+	if not s then return "" end
+	return (utf8 and utf8.lower) and utf8.lower(s) or s:lower()
+end
 local JEWEL_RADIUS_TINT_NEUTRAL = { 1, 1, 1, 0.7 }
 local JEWEL_RADIUS_TINT_PRIMARY_ONLY = { 1, 0, 0, 0.7 }
 local JEWEL_RADIUS_TINT_COMPARE_ONLY = { 0, 1, 0, 0.7 }
@@ -1560,11 +1566,23 @@ function PassiveTreeViewClass:DoesNodeMatchSearchParams(build, node)
 		return false
 	end
 
-	-- Check node name
+	-- Check node name (EN)
 	err, needMatches = PCall(search, node.dn:lower(), needMatches)
 	if err then return false end
 	if #needMatches == 0 then
 		return true
+	end
+
+	-- Check node Russian name if localized
+	if TreeNodesRU then
+		local ru = TreeNodesRU:Get(node)
+		if ru and ru ~= node.dn then
+			local ruMatches
+			err, ruMatches = PCall(search, toLowerStr(ru), needMatches)
+			if not err and #ruMatches == 0 then
+				return true
+			end
+		end
 	end
 
 	-- Check node description
@@ -1638,12 +1656,22 @@ function PassiveTreeViewClass:AddNodeName(tooltip, node, build)
 	if node.unlockConstraint then
 		tooltip.tooltipHeader = "ORACLE_" .. tooltip.tooltipHeader
 	end
-	local nodeName = node.dn
-	if main.showFlavourText then
-		nodeName = "^xF8E6CA" .. node.dn
-	end
+	local itemLang = (main and main.itemLanguage) or "DUAL"
+	local ruName = (itemLang ~= "EN" and TreeNodesRU) and TreeNodesRU:Get(node) or nil
+	local colorPrefix = main.showFlavourText and "^xF8E6CA" or ""
+
 	tooltip.center = true
-	tooltip:AddLine(24, launch.devModeAlt and (node.iname .. " ["..node.id.."]") or nodeName, "FONTIN")
+	if launch.devModeAlt then
+		tooltip:AddLine(24, node.iname .. " ["..node.id.."]", "FONTIN")
+	elseif itemLang == "RU" then
+		tooltip:AddLine(24, colorPrefix .. (ruName or node.dn), "FONTIN")
+	elseif itemLang == "DUAL" and ruName and ruName ~= node.dn then
+		-- Dual mode: Russian name on top, English original beneath in grey ^8
+		tooltip:AddLine(22, colorPrefix .. ruName, "FONTIN")
+		tooltip:AddLine(16, "^8" .. node.dn, "FONTIN SC")
+	else
+		tooltip:AddLine(24, colorPrefix .. node.dn, "FONTIN")
+	end
 	tooltip.center = false
 	if launch.devModeAlt and node.id > 65535 then
 		-- Decompose cluster node Id
@@ -2067,7 +2095,15 @@ function PassiveTreeViewClass:AddNodeTooltip(tooltip, node, build, incSmallPassi
 					addedSeparator = true
 					tooltip:AddSeparator(14)
 				end
-				tooltip:AddLine(14, colorCodes.WARNING.."Requires allocation of node: "..reqNode.dn)
+				local reqName = reqNode.dn
+				local itemLang = (main and main.itemLanguage) or "DUAL"
+				if itemLang ~= "EN" and TreeNodesRU then
+					local ruReq = TreeNodesRU:Get(reqNode)
+					if ruReq and ruReq ~= reqName then
+						reqName = (itemLang == "DUAL") and (ruReq .. " (" .. reqName .. ")") or ruReq
+					end
+				end
+				tooltip:AddLine(14, colorCodes.WARNING.."Requires allocation of node: "..reqName)
 			end
 		end
 

@@ -654,3 +654,41 @@ Ctrl+V (copy-paste файлов билдов) не должен ломаться
 - Регрессия: batch8 60/60, batch9 67/67, batch10 67/67, batch11 100/100 — все PASS (337/337 тестов).
 - Компиляция 4 файлов (ItemNamesRU, Main, ItemsTab, Tooltip) — COMPILE OK.
 - Снапшоты: `Snapshots/PoE2-ItemLocalization-20261111/`, `Snapshots/PoE2-ItemLocalization-Fix-20261111/`, `Snapshots/SimpleGraphic-Next-FontColorFix-20261111/`.
+
+## [D-024] Русская локализация дерева пассивных умений (Display Layer & Dual Tooltips)
+Дата: 2026-11-11
+Статус: ПРИНЯТО / РЕАЛИЗОВАНО
+Компонент: `PathOfBuilding-PoE2` (ветка `dev`)
+Связанные решения: D-023 (Item Localization & Dual Tooltips), D-022, D-016 (Fonts & UTF-8).
+
+Контекст: требуется локализовать отображение названий нод пассивного дерева умений в Path of Building PoE2 (Keystones, Notables, базовые ноды, ноды классов Восхождения), не затрагивая внутренние числовые и строковые идентификаторы (`node.id`, `node.skill`, `node.sd`, `node.mods`), которые используются ядром расчетов Calcs и графом связей дерева.
+
+Источники данных:
+- `PoE2-Localization-Extractor/exports/passives_ru_validation_retry1/passive_skill_trees/Default.json` (5,152 пассивки, 5,032 именованные ноды с официальным русским переводом).
+- `Atlas.json`, `EndgameMap.json`, `BrequelTree.json` (всего 6,415 уникальных хэшей/пассивок).
+- Сопоставление с `PathOfBuilding-PoE2/src/TreeData/0_5/tree.json`: 4,914 из 4,914 нод (100.0% совпадение по `skill == hash`).
+- Покрытие ранних версий дерева (0_1 .. 0_4): 99.0% - 99.8% благодаря комбинированному маппингу `bySkill` + `byName`.
+
+Решения:
+1. **Модуль `src/Data/TreeNodesRU.lua`:**
+   - Таблица `bySkill`: `[skill_id] = "Русское название"` (6,415 записей O(1) поиска по ID).
+   - Таблица `byName`: `["English Name"] = "Русское название"` (2,111 уникальных названий для фолбека).
+   - Метод `TreeNodesRU:Get(nodeOrName)`: универсальный доступ. Если передана таблица `node`, сначала ищет по `node.skill` / `node.id`, затем по `node.dn` / `node.name`. Если передан ID или строка — ищет в соответствующей таблице. Возвращает оригинальное имя при отсутствии перевода.
+2. **Слой отображения тултипов (`PassiveTreeView.lua` -> `AddNodeName`):**
+   - Управляется настройкой `main.itemLanguage` (EN / RU / DUAL):
+     - **EN:** оригинальное английское название `node.dn` (размер 24, FONTIN).
+     - **RU:** русское название `TreeNodesRU:Get(node)` (размер 24, FONTIN, с сохранением цвета пергамента `^xF8E6CA` при включенном `main.showFlavourText`).
+     - **DUAL:** двухстрочный заголовок:
+       - 1-я строка по центру: русское название (размер 22, FONTIN).
+       - 2-я строка по центру: оригинальное английское название серым цветом `^8` (размер 16, FONTIN SC).
+   - Охватывает просмотрщик дерева на вкладке дерева, `ItemsTab:socketViewer` и выбор нотаблов `NotableDBControl`.
+3. **Двуязычный поиск по дереву (`PassiveTreeView.lua` -> `DoesNodeMatchSearch`):**
+   - Поле поиска по пассивному дереву теперь поддерживает запросы как на английском, так и на русском языке (например: "zealot" или "фанатик" / "обет", "ветра" или "winds").
+   - Для регистронезависимого поиска кириллицы в UTF-8 задействован `lua-utf8` (`utf8.lower`), исключающий пропуски заглавных русских букв.
+4. **Требования к открытию нод:**
+   - В блоке `Requires allocation of node` имя требуемой ноды в режиме DUAL отображается в формате `Русское имя (English Name)`.
+
+Верификация:
+- Харнес `harness_batch13_treeloc.lua` — **34/34 PASS** (host.exe).
+- Регрессионный сьют: batch8 (60/60), batch9 (67/67), batch10 (67/67), batch11 (100/100), batch12 (44/44), batch13 (34/34) — **372/372 PASS (100%)**.
+- Снапшот: `Snapshots/PoE2-PassiveTreeLoc-20261111/`.
