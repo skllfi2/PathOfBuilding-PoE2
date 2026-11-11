@@ -166,10 +166,12 @@ function TooltipClass:CheckForUpdate(...)
 	if doUpdate
 		or self.updateParams.notSupportedModTooltips ~= main.notSupportedModTooltips
 		or self.updateParams.sideBySideItemComparison ~= main.sideBySideItemComparison
-		or self.updateParams.compactTooltips ~= main.compactTooltips then
+		or self.updateParams.compactTooltips ~= main.compactTooltips
+		or self.updateParams.itemLanguage ~= main.itemLanguage then
 		self.updateParams.notSupportedModTooltips = main.notSupportedModTooltips
 		self.updateParams.sideBySideItemComparison = main.sideBySideItemComparison
 		self.updateParams.compactTooltips = main.compactTooltips
+		self.updateParams.itemLanguage = main.itemLanguage
 		self:Clear()
 		return true
 	end
@@ -364,9 +366,16 @@ end
 -- columns that the tooltip would otherwise create.
 function TooltipClass:GetCardWidth()
 	local ttW = self:GetSize()
-	if self.tooltipHeader and main.showFlavourText and self.lines[1] and self.lines[1].text then
-		local titleW = DrawStringWidth(self.lines[1].size, self.lines[1].font, self.lines[1].text)
-		ttW = m_max(ttW, titleW + 50)
+	if self.tooltipHeader and main.showFlavourText then
+		for _, lineData in ipairs(self.lines) do
+			if lineData.separatorImage then
+				break
+			end
+			if lineData.text then
+				local titleW = DrawStringWidth(lineData.size, lineData.font or "VAR", lineData.text)
+				ttW = m_max(ttW, titleW + 50)
+			end
+		end
 	end
 	if self.maxCardWidth then
 		ttW = m_min(ttW, self.maxCardWidth)
@@ -380,7 +389,14 @@ function TooltipClass:GetDynamicSize(viewPort)
 		local rarity = tostring(self.tooltipHeader):upper()
 		local config = headerConfigs[rarity] or headerConfigs.NORMAL
 		self.titleYOffset = config.textYOffset or 0
-		staticttW = m_max(staticttW, DrawStringWidth(self.lines[1].size, self.lines[1].font, self.lines[1].text) + 50)
+		for _, lineData in ipairs(self.lines) do
+			if lineData.separatorImage then
+				break
+			end
+			if lineData.text then
+				staticttW = m_max(staticttW, DrawStringWidth(lineData.size, lineData.font or "VAR", lineData.text) + 50)
+			end
+		end
 	end
 	if self.maxCardWidth then
 		staticttW = m_min(staticttW, self.maxCardWidth)

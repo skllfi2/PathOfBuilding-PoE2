@@ -110,6 +110,20 @@
   (Main, ItemComparison, ItemsTab, Tooltip, PassiveTreeView) — COMPILE OK
   (host.exe).
 
+- **Item Names Russian Localization (D-023, 2026-11-11, НЕ закоммичено):**
+  - Новый модуль `src/Data/ItemNamesRU.lua` — маппинг `["English Name"] = "Русское название"` (679 записей: 441 уники, 238 базовых предмета оружия/брони). Генерируется скриптом из экспортов `base_items_ru_validation_retry8` и `uniques_ru_validation1`. `ItemNamesRU:Get(en)` с фолбеком на оригинал.
+  - Настройка `main.itemLanguage` (EN / RU / DUAL, default DUAL): `itemLanguage` атрибут в `<Misc>` Settings.xml; DropDown «Item Names Language:» в Options (Build-related); wiring в `savedState`, `currentState`, Cancel.
+  - `AddItemTooltip` (ItemsTab.lua) + `Tooltip.lua` + `r_font.cpp` (SimpleGraphic-Next):
+    - DUAL: двухблочный заголовок. Внутри фигурного баннера — чистое русское название (`АСТРАМЕНТИС`, `АМУЛЕТ С ОНИКСОМ` / `ШИРОКИЙ МЕЧ`), строки короткие по центру — рамка ничего не закрывает. Под баннером отдельной строкой серым `^8` — оригинальный английский подзаголовок (`Astramentis (Onyx Amulet)` / `Broadsword`).
+    - Русские заголовки приводятся к верхнему регистру (`toUpperRu` через `lua-utf8`) — капитель в стиле официального PoE2, плотный и крупный шрифт.
+    - Фикс цвета и затемнения шрифта в C++ (`r_font.cpp`): замена `IMGTYPE_GRAY` на `IMGTYPE_RGBA` с белым RGB и coverage-альфой устранила двойное умножение на альфу. Цвет русских букв теперь 100% яркий и идентичен Fontin. Свежая `SimpleGraphic.dll` развернута в `runtime/` и `smoke/`.
+    - Строго 2 строки в шапке для уников (Title + Base), 1 строка для баз: аутентичный декоративный баннер 58px / 38px не искажается и не перекрывает моды.
+    - Auto-fit размера шрифта заголовка: плавное уменьшение (22 → 18 → 15) при длинных названиях.
+    - `Tooltip.lua`: замер ширины `GetCardWidth`/`GetDynamicSize` проверяет ВСЕ строки шапки с отступом +50px (текст не выходит за границы); `CheckForUpdate` мгновенно сбрасывает кэш при смене языка.
+  - Внутренние идентификаторы (`item.baseName`, `item.title`, `item.namePrefix/Suffix`) остаются на английском — не ломает Calcs, моды, pobb.in.
+  - Харнес `harness_batch12_itemloc.lua` — **44/44 PASS**; регрессия batch8–11 — все PASS (337/337 тестов); компиляция 4 файлов — COMPILE OK.
+  - Снапшоты: `Snapshots/PoE2-ItemLocalization-20261111/`, `Snapshots/PoE2-ItemLocalization-Fix-20261111/`, `Snapshots/SimpleGraphic-Next-FontColorFix-20261111/`. Решения — DECISIONS.md D-023.
+
 ### PathOfBuilding-SimpleGraphic
 
 - Branch: `i18n-unicode-test`

@@ -1,6 +1,37 @@
 # Session Handoff
 
-Дата: 2026-11-10. Заполнил: OpenCode (MiniMax-M3.1-Flash). Последнее обновление: часть 14 — Side-by-Side Item Comparison.
+Дата: 2026-11-11. Заполнил: OpenCode (Nemotron-3.5-Super-VL). Последнее обновление: часть 15 — Item Names Russian Localization.
+
+## 15. Item Names Russian Localization (2026-11-11)
+
+### Что сделано
+1. **Новый модуль `src/Data/ItemNamesRU.lua`** — маппинг `["English Name"] = "Русское название"` (679 записей: 441 уники, 238 базовых предмета оружия/брони). Генерируется скриптом `gen_itemnames_ru_v2.py` из экспортов `base_items_ru_validation_retry8/base_items.json` и `uniques_ru_validation1/uniques.json`. `ItemNamesRU:Get(en)` с фолбеком на оригинал.
+2. **Настройка `main.itemLanguage` (src/Modules/Main.lua):**
+   - `self.itemLanguage = "DUAL"` в `Init()`.
+   - Чтение `node.attrib.itemLanguage` в `LoadSettings()` с валидацией (EN/RU/DUAL).
+   - Запись `itemLanguage = self.itemLanguage or "DUAL"` в `SaveSettings()` (`<Misc>`).
+   - Добавлен в `savedState`, `currentState` (resize), `controls.cancel` (откат).
+   - DropDown «Item Names Language:» в Options (Build-related): English (Original) / Русский (RU) / Dual (Русский + English).
+3. **Локализация в `AddItemTooltip` (src/Classes/ItemsTab.lua):**
+   - EN: только английское название (как было).
+   - RU: русское название из словаря (фолбек на оригинал).
+   - DUAL: русская строка первой строкой крупно, вторая строка серым (`^8`) — английский оригинал.
+   - Покрывает и вторичную карточку Side-by-Side (рекурсивный `AddItemTooltip`).
+   - Внутренние идентификаторы (`item.baseName`, `item.title`, ...) остаются на английском.
+4. **Снапшот:** `Snapshots/PoE2-ItemLocalization-20261111/` (Main.lua, ItemsTab.lua до правок).
+5. **Харнес:** `build-SimpleGraphic-Next\smoke\pob2lua\harness_batch12_itemloc.lua` + `run_batch12_itemloc.lua`.
+
+### Результаты верификации
+- `harness_batch12_itemloc.lua` (host.exe): **38/38 PASS** — модуль ItemNamesRU, wiring Main.lua, локализация ItemsTab.lua, компиляция 3 файлов.
+- Регрессия: batch8 60/60, batch9 67/67, batch10 67/67, batch11 100/100 — **все PASS**.
+- `git diff --check` — без whitespace-ошибок. Коммиты не выполнены (ветка dev).
+
+### Живая проверка владельцем (предложено)
+- Options → Item Names Language → RU / DUAL / EN; проверить тултипы предметов (оружие, броня, бижутерия, флаконы, чармы, уники).
+- Проверить сохранение `itemLanguage` в `Settings.xml` и восстановление при переоткрытии Options.
+- Проверить DUAL-режим: русское название крупно, английское серым (`^8`) второй строкой.
+- Проверить Side-by-Side карту: локализация適用ется ко вторичной карточке.
+- Решения — DECISIONS.md D-023; статус — CURRENT_STATE.md.
 
 ## 14. Side-by-Side Item Comparison (2026-11-10)
 
@@ -919,3 +950,27 @@ batch4 50/50, batch5 40/40.
    - Интеграционный харнесс `harness_batch11_sidebyside.lua` — **100/100 PASS**.
    - Регрессионные харнессы: batch 7..10 — **все PASS**.
    - Документация синхронизирована.
+
+## 16. Русская локализация названий предметов (D-023) и исправление визуального слоя заголовков (2026-11-11)
+
+### Что сделано
+1. **Словарь `src/Data/ItemNamesRU.lua`:** 679 записей (441 уник, 238 базовых предметов).
+2. **Настройка `main.itemLanguage` (EN/RU/DUAL, default DUAL):** `Settings.xml` + Options DropDown.
+3. **Исправление визуального слоя заголовков (обратная связь владельца):**
+   - **Цвет и яркость шрифта (C++):** в `r_font.cpp` заменена растеризация `IMGTYPE_GRAY` на `IMGTYPE_RGBA` с белым RGB и coverage-альфой. Устранено квадратичное двойное затемнение глифов. Свежая `SimpleGraphic.dll` собрана и развернута.
+   - **Шрифт русского названия:** русские заголовки приводятся к верхнему регистру (`toUpperRu` через `lua-utf8`) — капитель в стиле игры PoE2, плотные и крупные буквы.
+   - **Границы и шапка (фикс перекрытия рамкой):**
+     - Внутри декоративного баннера: чистое русское название (`АСТРАМЕНТИС` / `ШИРОКИЙ МЕЧ`), короткие строки по центру с запасом 80-100 px до боковых рамок — рамка ничего не закрывает.
+     - Под декоративным баннером: оригинальный английский подзаголовок серым цветом `^8` (`Astramentis (Onyx Amulet)` / `Broadsword`) на всю ширину карточки (438 px).
+     - Auto-fit размера шрифта заголовка: плавное масштабирование (22 → 18 → 15) при длинных названиях.
+     - `Tooltip.lua`: замер ширины в `GetCardWidth`/`GetDynamicSize` проверяет ВСЕ строки шапки с запасом +50px (карточка резервирует ширину, текст не выходит за границы); `CheckForUpdate` мгновенно сбрасывает кэш при смене языка.
+4. **Снапшоты:**
+   - `Snapshots/PoE2-ItemLocalization-20261111/`
+   - `Snapshots/PoE2-ItemLocalization-Fix-20261111/`
+   - `Snapshots/SimpleGraphic-Next-FontColorFix-20261111/`
+5. **Верификация:**
+   - `harness_batch12_itemloc.lua` — **44/44 PASS** (host.exe).
+   - Регрессия: batch 8 (60/60), batch 9 (67/67), batch 10 (67/67), batch 11 (100/100) — все PASS (337/337 тестов).
+   - Сборка SimpleGraphic RelWithDebInfo/x64 — EXITCODE 0, DLL развернута.
+   - Компиляция 4 файлов (ItemNamesRU, Main, ItemsTab, Tooltip) — COMPILE OK.
+   - Рабочая ветка: `dev`, коммиты не выполнялись.

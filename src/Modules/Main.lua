@@ -123,6 +123,7 @@ function main:Init()
 	self.errorReadingSettings = false
 	self.uiFont = UIFont.defaultPreset
 	self.uiAccent = "PoE2 Gold"
+	self.itemLanguage = "DUAL"
 
 	if not SetDPIScaleOverridePercent then SetDPIScaleOverridePercent = function(scale) end end
 
@@ -727,6 +728,12 @@ function main:LoadSettings(ignoreBuild)
 				if node.attrib.uiAccent then
 					self.uiAccent = node.attrib.uiAccent
 				end
+				if node.attrib.itemLanguage then
+					local lang = node.attrib.itemLanguage
+					if lang == "EN" or lang == "RU" or lang == "DUAL" then
+						self.itemLanguage = lang
+					end
+				end
 				if type(WindowState) == "table" then
 					self.windowState = WindowState.Read(node.attrib)
 				end
@@ -911,7 +918,8 @@ function main:SaveSettings()
 		disableScrollControlInteraction = tostring(self.disableScrollControlInteraction),
 		dpiScaleOverridePercent = tostring(self.dpiScaleOverridePercent),
 		uiFont = self.uiFont or "authentic",
-		uiAccent = self.uiAccent or "PoE2 Gold"
+		uiAccent = self.uiAccent or "PoE2 Gold",
+		itemLanguage = self.itemLanguage or "DUAL"
 	}
 	-- Persist the current window geometry (position, size, maximised flag) so
 	-- that it can be restored on the next start
@@ -1018,6 +1026,7 @@ function main:OpenOptionsPopup(savedState)
 		dpiScaleOverridePercent = self.dpiScaleOverridePercent,
 		uiFont = self.uiFont or UIFont.defaultPreset,
 		uiAccent = self.uiAccent or "PoE2 Gold",
+		itemLanguage = self.itemLanguage or "DUAL",
 	}
 
 	-- NOTE: Height needs to be adjusted if more menu options are added
@@ -1328,6 +1337,18 @@ function main:OpenOptionsPopup(savedState)
 	controls.sideBySideItemComparison.state = self.sideBySideItemComparison
 
 	nextRow()
+	controls.itemLanguage = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 200, 18 }, {
+		{ label = "English (Original)", lang = "EN" },
+		{ label = "Русский (RU)", lang = "RU" },
+		{ label = "Dual (Русский + English)", lang = "DUAL" },
+	}, function(index, value)
+		self.itemLanguage = value.lang
+	end)
+	controls.itemLanguageLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.itemLanguage, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Item Names Language:")
+	controls.itemLanguage.tooltipText = "Language used for item base and unique names in tooltips.\nInternal item identifiers remain in English for calculation compatibility.\nDual shows Russian on the first line and English in grey on the second line."
+	controls.itemLanguage:SelByValue(savedState.itemLanguage, "lang")
+
+	nextRow()
 	controls.invertSliderScrollDirection = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Invert slider scroll direction:", function(state)
 		self.invertSliderScrollDirection = state
 	end)
@@ -1436,6 +1457,7 @@ function main:OpenOptionsPopup(savedState)
 		SetDPIScaleOverridePercent(self.dpiScaleOverridePercent)
 		self.uiFont = savedState.uiFont
 		self.uiAccent = savedState.uiAccent
+		self.itemLanguage = savedState.itemLanguage
 		local ThemeFluent = LoadModule("Modules/ThemeFluent")
 		if ThemeFluent and ThemeFluent.SetAccent then
 			ThemeFluent:SetAccent(self.uiAccent)
@@ -1493,6 +1515,7 @@ function main:OpenOptionsPopup(savedState)
 				dpiScaleOverridePercent = self.dpiScaleOverridePercent,
 				uiFont = self.uiFont or UIFont.defaultPreset,
 				uiAccent = self.uiAccent or "PoE2 Gold",
+				itemLanguage = self.itemLanguage or "DUAL",
 			}
 			self:ClosePopup()
 			self:OpenOptionsPopup(currentState)

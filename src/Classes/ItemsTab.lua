@@ -18,6 +18,8 @@ local buySimilar = LoadModule("Classes/CompareBuySimilar")
 
 local gemTooltip = LoadModule("Classes/GemTooltip")
 local ItemComparison = LoadModule("Modules/ItemComparison")
+local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+local utf8 = require('lua-utf8')
 local rarityDropList = {
 	{ label = colorCodes.NORMAL.."Normal", rarity = "NORMAL" },
 	{ label = colorCodes.MAGIC.."Magic", rarity = "MAGIC" },
@@ -3776,25 +3778,84 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 	tooltip.tooltipHeader = item.rarity
 	tooltip.center = true
 	tooltip.color = rarityCode
+	-- Item name (with RU localization support)
+	local itemLang = main.itemLanguage or "DUAL"
+	local function ruNameOf(enName)
+		return ItemNamesRU:Get(enName)
+	end
+	local function toUpperRu(str)
+		if not str then return "" end
+		local u = utf8 and utf8.upper
+		if u then
+			local ok, res = pcall(u, str)
+			if ok and res then return res end
+		end
+		return str:upper()
+	end
+
+	-- Adds a header line formatted to fit cleanly within header bounds without overflowing
+	local maxTitleW = (cardWidthLimit or 600) - 100
+	local function addHeaderLine(enName, customRu)
+		enName = tostring(enName or "")
+		local ru = (type(customRu) == "string" and customRu) or ruNameOf(enName) or enName
+		ru = tostring(ru)
+		local ruUp = toUpperRu(ru)
+		local lineText = rarityCode .. (itemLang == "EN" and enName or ruUp)
+
+		local lineSize = fontSizeTitle
+		local curW = DrawStringWidth(lineSize, "FONTIN SC", lineText)
+		if curW > maxTitleW and lineSize > 18 then
+			lineSize = 18
+			curW = DrawStringWidth(lineSize, "FONTIN SC", lineText)
+		end
+		if curW > maxTitleW and lineSize > 15 then
+			lineSize = 15
+		end
+		tooltip:AddLine(lineSize, lineText, "FONTIN SC")
+	end
+
 	-- Shared items can use old base names that no longer exist. Add a tooltip so they can be copied or removed without causing a crash.
 	if not item.base or not item.baseName then
-		tooltip:AddLine(fontSizeTitle, rarityCode..(item.title or item.name or "Unknown Item"), "FONTIN SC")
+		local enName = item.title or item.name or "Unknown Item"
+		addHeaderLine(enName)
 		tooltip:AddSeparator(sepGapHeader)
 		tooltip:AddLine(fontSizeTitle, colorCodes.NEGATIVE.."Item base is not supported by the current version.", "FONTIN SC")
 		return
 	end
-	-- Item name
+
+	local enSubtitle
 	if item.title then
-		tooltip:AddLine(fontSizeTitle, rarityCode..item.title, "FONTIN SC")
-		tooltip:AddLine(fontSizeTitle, rarityCode..item.baseName:gsub(" %(.+%)",""), "FONTIN SC")
+		addHeaderLine(item.title)
+		local cleanBase = (item.baseName:gsub(" %(.+%)",""))
+		addHeaderLine(cleanBase)
+		if itemLang == "DUAL" then
+			local enFull = item.title .. (cleanBase ~= "" and (" (" .. cleanBase .. ")") or "")
+			local ruFull = ruNameOf(item.title) .. (cleanBase ~= "" and (" (" .. ruNameOf(cleanBase) .. ")") or "")
+			if enFull:lower() ~= ruFull:lower() then
+				enSubtitle = enFull
+			end
+		end
 	else
-		tooltip:AddLine(fontSizeTitle, rarityCode..item.namePrefix..item.baseName:gsub(" %(.+%)","")..item.nameSuffix, "FONTIN SC")
+		local rawBase = (item.baseName:gsub(" %(.+%)",""))
+		local ruBase = ruNameOf(rawBase)
+		local enFull = item.namePrefix .. rawBase .. item.nameSuffix
+		local ruFull = item.namePrefix .. ruBase .. item.nameSuffix
+		addHeaderLine(enFull, ruFull)
+		if itemLang == "DUAL" and enFull:lower() ~= ruFull:lower() then
+			enSubtitle = enFull
+		end
 	end
 	if options.comparisonLabel then
 		tooltip:AddLine(fontSizeBig, options.comparisonLabel, "FONTIN SC")
 	end
 	tooltip.runicItem = item.runicItem
 	tooltip:AddSeparator(sepGapDefault)
+
+	-- Subtitle in DUAL mode: original English name displayed cleanly under the header banner without crowding
+	if enSubtitle then
+		tooltip:AddLine(fontSizeSmall, "^8" .. enSubtitle, "FONTIN SC")
+		tooltip:AddSeparator(sepGapDefault)
+	end
 
 	-- Special fields for database items
 	if dbMode then
