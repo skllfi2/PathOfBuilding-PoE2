@@ -7,6 +7,7 @@ local m_max = math.max
 local m_min = math.min
 
 local GemTooltip = { }
+local GemNamesRU = LoadModule("Data/GemNamesRU")
 
 local function getFontSizes()
 	return main.showFlavourText and 18 or 16, main.showFlavourText and 24 or 20
@@ -344,12 +345,30 @@ function GemTooltip.AddGemTooltip(tooltip, build, gemInstance, options)
 	 	iconTagIndent = "      "
 	end
 
-	if grantedEffect.name:match("^Spectre:") or grantedEffect.name:match("^Companion:") then
-		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. (gemInstance.displayEffect and gemInstance.displayEffect.nameSpec or gemInstance.gemData.name), "FONTIN SC")
+	local itemLang = (main and main.itemLanguage) or "DUAL"
+	local enTitle = (grantedEffect.name:match("^Spectre:") or grantedEffect.name:match("^Companion:")) and
+		(gemInstance.displayEffect and gemInstance.displayEffect.nameSpec or gemInstance.gemData.name) or gemInstance.gemData.name
+	local ruTitle = (itemLang ~= "EN" and GemNamesRU) and GemNamesRU:Get(gemInstance.gemData) or nil
+
+	if itemLang == "RU" then
+		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. (ruTitle or enTitle), "FONTIN SC")
+	elseif itemLang == "DUAL" and ruTitle and ruTitle ~= enTitle then
+		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. ruTitle, "FONTIN SC")
+		tooltip:AddLine(fontSizeBig, "^8" .. iconNameIndent .. enTitle, "FONTIN SC")
 	else
-		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. gemInstance.gemData.name, "FONTIN SC")
+		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. enTitle, "FONTIN SC")
 	end
-	tooltip:AddLine(fontSizeBig, colorCodes.GEMINFO .. iconTagIndent .. gemInstance.gemData.gemType, "FONTIN SC")
+
+	local displayType = gemInstance.gemData.gemType
+	if itemLang ~= "EN" and GemNamesRU and GemNamesRU.gemTypes[displayType] then
+		local ruType = GemNamesRU.gemTypes[displayType]
+		if itemLang == "DUAL" then
+			displayType = ruType .. " (" .. displayType .. ")"
+		else
+			displayType = ruType
+		end
+	end
+	tooltip:AddLine(fontSizeBig, colorCodes.GEMINFO .. iconTagIndent .. displayType, "FONTIN SC")
 	tooltip:AddSeparator(8)
 	if grantedEffect.legacy then
 		tooltip:AddLine(fontSizeBig, colorCodes.WARNING .. "   Legacy Gem", "FONTIN SC")

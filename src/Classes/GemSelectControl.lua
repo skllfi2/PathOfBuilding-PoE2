@@ -12,6 +12,12 @@ local m_max = math.max
 local m_floor = math.floor
 
 local gemTooltip = LoadModule("Classes/GemTooltip")
+local GemNamesRU = LoadModule("Data/GemNamesRU")
+local utf8 = require('lua-utf8')
+local function toLowerStr(s)
+	if not s then return "" end
+	return (utf8 and utf8.lower) and utf8.lower(s) or s:lower()
+end
 
 local toolTipText = "Prefix tag searches with a colon and exclude tags with a dash. e.g. :fire:lightning:-cold:area"
 
@@ -25,7 +31,21 @@ local GemSelectClass = newClass("GemSelectControl", "EditControl")
 ---@param changeFunc fun(...)
 ---@param forceTooltip boolean
 function GemSelectClass:GemSelectControl(anchor, rect, skillsTab, index, changeFunc, forceTooltip)
-	self:EditControl(anchor, rect, nil, nil, "^ %a':-")
+	self:EditControl(anchor, rect, nil, nil, "^ %a':-%z\128-\255")
+	self.inactiveText = function(buf)
+		local itemLang = (main and main.itemLanguage) or "DUAL"
+		if itemLang ~= "EN" and GemNamesRU and buf and #buf > 0 then
+			local ru = GemNamesRU:Get(buf)
+			if ru and ru ~= buf then
+				if itemLang == "RU" then
+					return ru
+				elseif itemLang == "DUAL" then
+					return ru .. " ^8(" .. buf .. ")"
+				end
+			end
+		end
+		return buf
+	end
 	self.controls.scrollBar = new("ScrollBarControl"):ScrollBarControl({ "TOPRIGHT", self, "TOPRIGHT" }, { -1, 0, 18, 0 }, (self.height - 4) * 4)
 	self.controls.scrollBar.y = function()
 		local width, height = self:GetSize()
@@ -150,7 +170,7 @@ function GemSelectClass:BuildList(buf)
 		t_remove(tagsList, 1)
 
 		-- Search for gem name using increasingly broad search patterns
-		local lowerSearch = searchTerm:lower()
+		local lowerSearch = toLowerStr(searchTerm)
 		local patternList = {
 			"^ " .. lowerSearch.."$", -- Exact match
 			"^" .. lowerSearch:gsub("%a", " %0%%l+") .. "$", -- Simple abbreviation ("CtF" -> "Cold to Fire")
@@ -160,7 +180,10 @@ function GemSelectClass:BuildList(buf)
 		for i, pattern in ipairs(patternList) do
 			local matchList = { }
 			for gemId, gemData in pairs(self.gems) do
-				if self:FilterSupport(gemId, gemData) and not added[gemId] and ((" "..gemData.name:lower()):match(pattern)) then
+				local ruName = (GemNamesRU and GemNamesRU:Get(gemData)) or nil
+				local matchEN = (" "..toLowerStr(gemData.name)):match(pattern)
+				local matchRU = ruName and ((" "..toLowerStr(ruName)):match(pattern))
+				if self:FilterSupport(gemId, gemData) and not added[gemId] and (matchEN or matchRU) then
 					addThisGem = true
 					if #tagsList > 0 then
 						for _, tag in ipairs(tagsList) do
@@ -562,7 +585,18 @@ function GemSelectClass:Draw(viewPort, noTooltip)
 					SetDrawColor(colorCodes.INTELLIGENCE)
 				end
 			end
-			local gemText = gemData and gemData.name or "<No matches>"
+			local itemLang = (main and main.itemLanguage) or "DUAL"
+			local gemText = "<No matches>"
+			if gemData then
+				local ru = (itemLang ~= "EN" and GemNamesRU) and GemNamesRU:Get(gemData) or nil
+				if itemLang == "RU" and ru then
+					gemText = ru
+				elseif itemLang == "DUAL" and ru and ru ~= gemData.name then
+					gemText = ru .. " ^8(" .. gemData.name .. ")"
+				else
+					gemText = gemData.name
+				end
+			end
 			DrawString(0, y, "LEFT", height - 4, "VAR", gemText)
 			if gemData then
 				if gemData.grantedEffect.support and self.sortCache.canSupport[gemId] and self.sortCache.dpsColor[gemId] ~= "" then
