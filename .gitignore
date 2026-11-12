@@ -54,3 +54,7 @@ runtime/SimpleGraphic/Screenshots
 # Local font/dll backups
 *.authentic-bak
 *.before-*
+
+# Local RU localization audit & runtime miss log
+scratch/
+src/untranslated_live.log
