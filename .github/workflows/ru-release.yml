@@ -1,0 +1,64 @@
+name: Build RU Portable Release
+on:
+  push:
+    tags:
+      - 'v*-ru'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.23.1-ru)'
+        required: false
+        default: 'v0.23.1-ru'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage portable RU package
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event.inputs.tag_name }}" -ne "") { "${{ github.event.inputs.tag_name }}" } else { "${{ github.ref_name }}" }
+          $stage = Join-Path $env:RUNNER_TEMP "PathOfBuilding-PoE2-RU"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          Copy-Item "runtime\*.dll" $stage
+          Copy-Item "runtime\Update.exe" $stage
+          Copy-Item "runtime\Path{space}of{space}Building-PoE2.exe" "$stage\Path of Building-PoE2.exe"
+          Copy-Item "runtime\lua" "$stage\lua" -Recurse
+
+          Get-ChildItem "src" | Where-Object {
+            $_.Name -notin @("untranslated_live.log") -and
+            $_.Name -notlike "to_translate_*.json" -and
+            $_.Name -notlike "ui_strings_*.json"
+          } | ForEach-Object {
+            Copy-Item $_.FullName (Join-Path $stage $_.Name) -Recurse
+          }
+          Remove-Item "$stage\Data\to_translate_*.json","$stage\Data\ui_strings_*.json" -ErrorAction SilentlyContinue
+
+          Copy-Item "changelog.txt","help.txt","LICENSE.md" $stage
+          (Get-Content "manifest.xml" -Raw -Encoding UTF8).Replace(
+            "PathOfBuildingCommunity/PathOfBuilding-PoE2/{branch}",
+            "${{ github.repository }}/ru-localization"
+          ) | Set-Content "$stage\manifest.xml" -Encoding UTF8 -NoNewline
+
+          $zip = Join-Path $env:RUNNER_TEMP "PathOfBuilding-PoE2-RU-$tag.zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal
+          "ZIP_PATH=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release create "$env:RELEASE_TAG" "$env:ZIP_PATH" `
+            --repo "${{ github.repository }}" `
+            --title "Path of Building (PoE2) $env:RELEASE_TAG" `
+            --generate-notes
