@@ -79,6 +79,12 @@ CalcBreakdownRU.static = {
 	["Regular Hit Freeze buildup"] = "Накопл. заморозки (обычн. удар)",
 	["Crit Freeze buildup"] = "Накопл. заморозки (крит)",
 	["Average Freeze buildup"] = "Сред. накопл. заморозки",
+	["Regular Hit Electrocute buildup"] = "Накопл. электризации (обычн. удар)",
+	["Crit Electrocute buildup"] = "Накопл. электризации (крит)",
+	["Average Electrocute buildup"] = "Сред. накопл. электризации",
+	["Regular Hit Pin buildup"] = "Накопл. пригвождения (обычн. удар)",
+	["Crit Pin buildup"] = "Накопл. пригвождения (крит)",
+	["Average Pin buildup"] = "Сред. накопл. пригвождения",
 	["NOTE: Having any energy shield when the hit occurs grants 50% chance to avoid stun."] = "ПРИМ.: Любой ЭЩ при ударе даёт 50% шанс избежать оглушения.",
 	["POB only applies this modifier when ES > Total incoming damage."] = "PoB применяет это только при ЭЩ > Общий входящий урон.",
 	["Total leeched per instance:"] = "Всего похищено за эффект:",
@@ -138,6 +144,19 @@ CalcBreakdownRU.parens = {
 	["total average number of hits you can take"] = "среднее число ударов до смерти",
 	["maximum mana"] = "макс. мана",
 	["percentage of mana to maximum leech rate"] = "% маны в макс. скорость похищения",
+	["maximum life"] = "макс. здоровье",
+	["percentage of life to maximum leech rate"] = "% здоровья в макс. скорость похищения",
+	["maximum energy shield"] = "макс. ЭЩ",
+	["percentage of energy shield to maximum leech rate"] = "% ЭЩ в макс. скорость похищения",
+	["frost shield limit"] = "лимит Морозного щита",
+	["portion taken from frost shield"] = "доля от Морозного щита",
+	["portion taken from life and energy shield"] = "доля от здоровья и ЭЩ",
+	["total time it would take to die"] = "общее время до гибели",
+	["stun multiplier"] = "множитель оглушения",
+	["effective enemy stun damage"] = "эфф. урон оглушения врага",
+	["stun threshold"] = "порог оглушения",
+	["number of hits"] = "число ударов",
+	["total burst damage"] = "общий взрывной урон",
 	["chance for block to fail"] = "шанс провала блока",
 	["chance to be hit by an Average hit"] = "шанс получить обычный удар",
 	["of damage taken from an Average hit"] = "урона от обычного удара",
@@ -373,11 +392,13 @@ local function translateNote(note)
 	if totTaken then return "общий " .. (typeNames[totTaken] or totTaken) .. " в расчёте EHP" end
 	local paidLife = note:match("^(%d+%%) paid for with life$")
 	if paidLife then return paidLife .. " оплачено здоровьем" end
+	local perSec = note:match("^([%d%.]+%%) per second$")
+	if perSec then return perSec .. " в секунду" end
 	return nil
 end
 
 function CalcBreakdownRU.Translate(coreText, tagless, colorPrefix, trailingSuffix)
-	local st = CalcBreakdownRU.static[tagless] or (trailingSuffix:sub(1, 1) == ":" and CalcBreakdownRU.static[tagless .. ":"])
+	local st = CalcBreakdownRU.static[tagless] or CalcBreakdownRU.static[tagless .. ":"]
 	if st then
 		if trailingSuffix:sub(1, 1) == ":" and st:sub(-1) == ":" then
 			st = st:sub(1, -2)
@@ -494,6 +515,14 @@ function CalcBreakdownRU.Translate(coreText, tagless, colorPrefix, trailingSuffi
 		}
 		return colorPrefix .. "Прибл. шанс " .. (kindMap[evKind] or evKind) .. ": " .. evVal .. trailingSuffix
 	end
+	local dotMod = tagless:match("^Dot Damage Taken modifier:%s*(.+)$")
+	if dotMod then return colorPrefix .. "Множ. получ. урон. сост.: " .. dotMod .. trailingSuffix end
+	local dotPool = tagless:match("^Total Effective Dot Pool:%s*(.+)$")
+	if dotPool then return colorPrefix .. "Общий эфф. пул урон. сост.: " .. dotPool .. trailingSuffix end
+	local enmTime = tagless:match("^x%s*([%d%.]+)%s+enemy attack/cast time$")
+	if enmTime then return colorPrefix .. "x " .. enmTime .. " ^8время атаки/чар врага" .. trailingSuffix end
+	local fromDef, fromVal = tagless:match("^from ([^:]+):%s*(.+)$")
+	if fromDef then return colorPrefix .. "от " .. fromDef .. ": " .. fromVal .. trailingSuffix end
 	local eqCps = tagless:match("^=%s*([%d%.]+)%s*casts per second$")
 	if eqCps then return colorPrefix .. "= " .. eqCps .. " ^8применений в секунду" .. trailingSuffix end
 	local enmPhys = tagless:match("^Enemy physical damage reduction:%s*(.+)$")
