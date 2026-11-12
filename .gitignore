@@ -58,3 +58,5 @@ runtime/SimpleGraphic/Screenshots
 # Local RU localization audit & runtime miss log
 scratch/
 src/untranslated_live.log
+src/Data/to_translate_*.json
+src/Data/ui_strings_*.json
