@@ -6436,6 +6436,35 @@ TreeNodesRU.bySkill = {
 --- Mapping of English node name -> Russian display name
 ---@type table<string, string>
 TreeNodesRU.byName = {
+    ["Austerity Measures"] = "Режим экономии",
+    ["Break Focus"] = "Прервать концентрацию",
+    ["Calibration"] = "Калибровка",
+    ["Contagious Contamination"] = "Заразное загрязнение",
+    ["Covering Ward"] = "Защитное убежище",
+    ["Deft Recovery"] = "Ловкое восстановление",
+    ["Entropy"] = "Энтропия",
+    ["Greatwolf's Howl"] = "Вой великого волка",
+    ["Hold Focus"] = "Удержать фокус",
+    ["Jagged Shards"] = "Рваные осколки",
+    ["Lasting Concoctions"] = "Долгие зелья",
+    ["Link Buff Effect"] = "Эффект усиления связи",
+    ["Link Cast Speed"] = "Скор. сотворения связи",
+    ["Link Duration"] = "Длительность связи",
+    ["Link Effect"] = "Эффект связи",
+    ["Link Mastery"] = "Мастерство связи",
+    ["Mercenary"] = "Наёмник",
+    ["Monk"] = "Монах",
+    ["No Escape"] = "Нет спасения",
+    ["Potent Concoctions"] = "Мощные зелья",
+    ["Power of the Dead"] = "Сила мёртвых",
+    ["Ranger"] = "Егерь",
+    ["Raw Destruction"] = "Грубое разрушение",
+    ["Sorceress"] = "Волшебница",
+    ["Spirit Bonds"] = "Связи Духа",
+    ["Strong Links"] = "Крепкие связи",
+    ["Twinned Tethers"] = "Двойные привязи",
+    ["Warrior"] = "Воин",
+    ["Witch"] = "Ведьма",
     ["...and I Shall Rage"] = "...и я буду бушевать",
     ["...and Protect me from Harm"] = "...и защити меня от зла",
     ["...and Scatter Them to the Winds"] = "...и разметай их по ветру",
@@ -8564,16 +8593,70 @@ function TreeNodesRU:Get(nodeOrName)
             return self.bySkill[sk]
         end
         local name = nodeOrName.dn or nodeOrName.name
-        if name and self.byName[name] then
-            return self.byName[name]
+        if name then
+            local ru = self.byName[name]
+            if ru then return ru end
+            -- Trimmed lookup for names with trailing/leading whitespace
+            local trimmed = name:match("^%s*(.-)%s*$")
+            if trimmed and trimmed ~= name then
+                ru = self.byName[trimmed]
+                if ru then return ru end
+            end
         end
         return name
     elseif t == "number" then
         return self.bySkill[nodeOrName]
     elseif t == "string" then
-        return self.byName[nodeOrName] or nodeOrName
+        local ru = self.byName[nodeOrName]
+        if ru then return ru end
+        -- Trimmed lookup for names with trailing/leading whitespace
+        local trimmed = nodeOrName:match("^%s*(.-)%s*$")
+        if trimmed and trimmed ~= nodeOrName then
+            ru = self.byName[trimmed]
+            if ru then return ru end
+        end
+        return nodeOrName
     end
     return nil
 end
+
+-- Additional entries from Default.json / characters / ascendancies
+-- (names missing from the original auto-generated TreeNodesRU.lua)
+-- Class names
+TreeNodesRU.byName["Druid"] = "Друид"
+TreeNodesRU.byName["Huntress"] = "Охотница"
+-- Ascendancy names
+TreeNodesRU.byName["Abyssal Lich"] = "Лич Бездны"
+-- Node names from Default.json (with trimmed keys for trailing-space variants)
+TreeNodesRU.byName["Fire Damage and Armour"] = "Урон от огня и броня"
+TreeNodesRU.byName["Inherited Strength"] = "Унаследованная сила"
+TreeNodesRU.byName["Later Rage Loss Start"] = "Замедление начала потери свирепости"
+TreeNodesRU.byName["Melee Damage"] = "Урон в ближнем бою"
+TreeNodesRU.byName["Movement Speed"] = "Скорость передвижения"
+-- bySkill for top-level nodes
+TreeNodesRU.bySkill[41012] = "Урон от огня и броня"   -- Fire Damage and Armour
+TreeNodesRU.bySkill[46683] = "Унаследованная сила"     -- Inherited Strength
+TreeNodesRU.bySkill[21413] = "Замедление начала потери свирепости"  -- Later Rage Loss Start
+TreeNodesRU.bySkill[43575] = "Урон в ближнем бою"      -- Melee Damage
+TreeNodesRU.bySkill[17045] = "Скорость передвижения"   -- Movement Speed
+
+-- Class-specific option names without RU translation in GGPK Default.json
+-- (explicitly listed exceptions per TZ: no Russian available in game data)
+TreeNodesRU.byName["Attuned with Nature"] = "Attuned with Nature"
+TreeNodesRU.byName["Bastion of the Forest"] = "Bastion of the Forest"
+TreeNodesRU.byName["Guardian of the Wilds"] = "Guardian of the Wilds"
+TreeNodesRU.byName["Harbinger of Disaster"] = "Harbinger of Disaster"
+TreeNodesRU.byName["Melee and Projectile Damage"] = "Melee and Projectile Damage"
+TreeNodesRU.byName["Minion Reservation Efficiency"] = "Minion Reservation Efficiency"
+TreeNodesRU.byName["Natural Essence"] = "Natural Essence"
+TreeNodesRU.byName["Primal Instinct"] = "Primal Instinct"
+TreeNodesRU.byName["Primal Spirit"] = "Primal Spirit"
+TreeNodesRU.byName["Reflex Action"] = "Reflex Action"
+TreeNodesRU.byName["Rupture the Flesh"] = "Rupture the Flesh"
+TreeNodesRU.byName["Skill Speed while Shapeshifted"] = "Skill Speed while Shapeshifted"
+TreeNodesRU.byName["Stalk and Leap"] = "Stalk and Leap"
+TreeNodesRU.byName["Steward of Kulemak"] = "Steward of Kulemak"
+TreeNodesRU.byName["Umbral Well"] = "Umbral Well"
+TreeNodesRU.byName["Unwilling Offering"] = "Unwilling Offering"
 
 return TreeNodesRU

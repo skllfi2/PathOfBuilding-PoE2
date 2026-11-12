@@ -9,6 +9,26 @@ local m_min = math.min
 
 local ThemeFluent = LoadModule("Modules/ThemeFluent")
 
+-- Variant B helper: strip leading colour escape codes (^7, ^8, ^xABCD12...)
+local function stripColorCodes(text)
+	return (text:gsub("%^x%x%x%x%x%x%x", ""):gsub("%^%d", ""))
+end
+
+-- Variant B helper: true when every numeric value in the summary string is zero
+-- ("0", "0/0", "0%/0%", "0.0", "+0%, 0/s" -> true; "2,851/2,851", "x 1.27" -> false)
+local function isZeroSummaryText(text)
+	if not text then return false end
+	local plain = stripColorCodes(text)
+	local hasNumber = false
+	for num in plain:gmatch("%d+%.?%d*") do
+		hasNumber = true
+		if tonumber(num) ~= 0 then
+			return false
+		end
+	end
+	return hasNumber
+end
+
 ---@class CalcSectionControl: Control, ControlHost
 local CalcSectionClass = newClass("CalcSectionControl", "Control", "ControlHost")
 
@@ -50,9 +70,13 @@ function CalcSectionClass:CalcSectionControl(calcsTab, width, id, group, colour,
 		end
 		subSec.collapsed = subSec.defaultCollapsed
 		self.controls["toggle" .. i] = new("ButtonControl"):ButtonControl({ "TOPRIGHT", self, "TOPRIGHT" }, { -3, -13 + (16 * i), 16, 16 }, function()
-			return subSec.collapsed and "+" or "-"
+			-- Auto-collapsed subsections show "+" until the user takes over
+			return (subSec.collapsed or subSec.autoCollapsed) and "+" or "-"
 		end, function()
-			subSec.collapsed = not subSec.collapsed
+			-- Variant B: a manual click hands control back to the user
+			subSec.userToggled = true
+			subSec.collapsed = not (subSec.collapsed or subSec.autoCollapsed)
+			subSec.autoCollapsed = false
 			self.calcsTab.modFlag = true
 		end)
 		if i == 1 then
@@ -113,6 +137,23 @@ function CalcSectionClass:IsMouseOver()
 	return mOver
 end
 
+-- Variant B: a subsection auto-collapses when the "Hide empty" toggle is on,
+-- the user never clicked its +/- button, it has no interactive controls, and
+-- its summary (extra) value is a pure zero. Recomputed every UpdateSize, so a
+-- non-zero value (e.g. equipping an ES item) instantly re-expands the block.
+function CalcSectionClass:IsAutoCollapsible(subSec)
+	local calcsTab = self.calcsTab
+	if calcsTab.input.hideEmptySections == false then return false end
+	if subSec.userToggled then return false end
+	if self.hasControls then return false end
+	local extra = subSec.data and subSec.data.extra
+	if not extra then return false end
+	local env = calcsTab.calcsEnv
+	if not env then return false end
+	local actor = calcsTab.input.showMinion and env.minion or env.player
+	return isZeroSummaryText(formatCalcStr(extra, actor))
+end
+
 function CalcSectionClass:UpdateSize()
 	self.enabled = self.calcsTab:CheckFlag(self)
 	if not self.enabled then
@@ -121,10 +162,13 @@ function CalcSectionClass:UpdateSize()
 	end
 	local x, y = self:GetPos()
 	local width = self:GetSize()
+	local labelWidth = self.calcsTab.labelWidth or 154
 	self.height = 2
 	self.enabled = false
 	local yOffset = 0
 	for i, subSec in ipairs(self.subSection) do
+		subSec.autoCollapsed = self:IsAutoCollapsible(subSec)
+		local collapsed = subSec.collapsed or subSec.autoCollapsed
 		self.controls["toggle"..i].y = yOffset + 3
 		local tempHeight = 0
 		yOffset = yOffset + 22
@@ -132,11 +176,20 @@ function CalcSectionClass:UpdateSize()
 			rowData.enabled = self.calcsTab:CheckFlag(rowData)
 			if rowData.enabled then
 				self.enabled = true
-				local xOffset = 134
+				local xOffset = labelWidth + 2
+				-- Variant A: 6-column damage tables share the remaining width evenly
+				local cellWidth = width - (labelWidth + 4)
+				if subSec.data.colWidth then
+					if #rowData == 6 then
+						cellWidth = (width - (labelWidth + 6)) / 6
+					else
+						cellWidth = subSec.data.colWidth
+					end
+				end
 				for colour, colData in ipairs(rowData) do
 					colData.xOffset = xOffset
 					colData.yOffset = yOffset
-					colData.width = subSec.data.colWidth or width - 136
+					colData.width = cellWidth
 					colData.height = 18
 					xOffset = xOffset + colData.width
 				end
@@ -144,18 +197,18 @@ function CalcSectionClass:UpdateSize()
 				self.height = self.height + 18
 				tempHeight = tempHeight + 18
 			end
-			if subSec.collapsed then
+			if collapsed then
 				rowData.enabled = false
 			end
 		end
-		if self.enabled and not subSec.collapsed then
+		if self.enabled and not collapsed then
 			self.height = self.height + 22
 		else
 			self.height = self.height - tempHeight + 20
 			yOffset = yOffset - tempHeight - 2
 		end
 	end
-	if self.enabled and not self.subSection[1].collapsed then
+	if self.enabled and not (self.subSection[1].collapsed or self.subSection[1].autoCollapsed) then
 		if self.updateFunc then
 			self:updateFunc()
 		end
@@ -341,7 +394,7 @@ function CalcSectionClass:GetOverlayHeight()
 	local enabled = self.calcsTab.calcsEnv and self.calcsTab:CheckFlag(self)
 	for i, subSec in ipairs(self.subSection) do
 		height = height + 22
-		if not subSec.collapsed and enabled then
+		if not (subSec.collapsed or subSec.autoCollapsed) and enabled then
 			for _, rowData in ipairs(subSec.data) do
 				if self.calcsTab:CheckFlag(rowData) then
 					height = height + 18
@@ -363,6 +416,7 @@ function CalcSectionClass:HandleOverlayClick(key, cursorX, cursorY)
 	local x = self.overlayX
 	local y = self.overlayY
 	local overlayWidth = self.width
+	local labelWidth = self.calcsTab.labelWidth or 154
 
 	-- Check close button
 	local closeX = x + overlayWidth - 18
@@ -382,14 +436,16 @@ function CalcSectionClass:HandleOverlayClick(key, cursorX, cursorY)
 			local toggleX = x + overlayWidth - 18
 			local toggleY = lineY + 3
 			if cursorX >= toggleX and cursorX <= toggleX + 14 and cursorY >= toggleY and cursorY <= toggleY + 16 then
-				subSec.collapsed = not subSec.collapsed
+				subSec.userToggled = true
+				subSec.collapsed = not (subSec.collapsed or subSec.autoCollapsed)
+				subSec.autoCollapsed = false
 				self.overlayRevision = nil
 				self.calcsTab.modFlag = true
 				return
 			end
 		end
 
-		if subSec.collapsed or not secEnabled then
+		if subSec.collapsed or subSec.autoCollapsed or not secEnabled then
 			if primary then
 				break
 			else
@@ -402,8 +458,8 @@ function CalcSectionClass:HandleOverlayClick(key, cursorX, cursorY)
 			for _, rowData in ipairs(subSec.data) do
 				if self.calcsTab:CheckFlag(rowData) then
 					for _, colData in ipairs(rowData) do
-						local cellX = x + (colData.xOffset or 134)
-						local cellW = colData.width or (overlayWidth - 136)
+						local cellX = x + (colData.xOffset or (labelWidth + 2))
+						local cellW = colData.width or (overlayWidth - (labelWidth + 4))
 						if cursorX >= cellX and cursorX <= cellX + cellW and cursorY >= lineY + 2 and cursorY <= lineY + 19 then
 							if colData.format and self.calcsTab:CheckFlag(colData) then
 								self.calcsTab:SetDisplayStat(colData, true)
@@ -505,7 +561,7 @@ function CalcSectionClass:DrawOverlay(viewPort, inputEvents)
 	if self.calcsTab.displayData and (self.overlayBreakdownCell or (self.calcsTab.displayPinned and self.calcsTab.displayData.calcSection == self)) then
 		local cd = self.calcsTab.displayData
 		local origX, origY = cd.x, cd.y
-		cd.x = x + (cd.xOffset or 134)
+		cd.x = x + (cd.xOffset or (self.calcsTab.labelWidth and self.calcsTab.labelWidth + 2 or 156))
 		cd.y = y + 26 + (cd.yOffset or 0)
 		self.calcsTab.controls.breakdown:Draw(viewPort)
 		cd.x, cd.y = origX, origY
@@ -525,8 +581,12 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 	local lineY = startLineY
 	local primary = true
 	local enabled = isOverlay and (actor and self.calcsTab:CheckFlag(self)) or self.enabled
+	local labelWidth = self.calcsTab.labelWidth or 154
 	-- Fluent thins the group-colour frame lines to hairlines; legacy keeps 2px
 	local lineWeight = DrawControlBox and 1 or 2
+	-- Variant A: damage-type column zoning (tints + bright element headers)
+	local damageTints = DrawControlBox and ThemeFluent.calcSection.damageTints
+	local damageHeaderColors = DrawControlBox and ThemeFluent.calcSection.damageHeaderColors
 
 	for _, subSec in ipairs(self.subSection) do
 		-- Top border
@@ -543,10 +603,15 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 			if not isOverlay and self.calcsTab:SearchMatch(subSec.label) then
 				textColor = colorCodes.HIGHLIGHT
 			end
-			DrawString(lx, lineY + 3, "LEFT", 16, "VAR BOLD", textColor..(subSec.label or "")..":")
+			local headerText = textColor..(subSec.label or "")..":"
+			DrawString(lx, lineY + 3, "LEFT", 16, "VAR BOLD", headerText)
 			if subSec.data.extra then
-				local ex = lx + DrawStringWidth(16, "VAR BOLD", subSec.label) + (isOverlay and 12 or 10)
-				DrawString(ex, lineY + 3, "LEFT", 16, "VAR", "^7"..formatCalcStr(subSec.data.extra, actor))
+				local ex = lx + DrawStringWidth(16, "VAR BOLD", headerText) + (isOverlay and 8 or 6)
+				-- Clip the summary so it can never run under the +/- toggle (SetViewport resets origin to ex, lineY)
+				local maxW = m_max(0, (drawX + drawWidth - 22) - ex)
+				SetViewport(ex, lineY, maxW, 20)
+				DrawString(0, 3, "LEFT", 16, "VAR", "^7"..formatCalcStr(subSec.data.extra, actor))
+				SetViewport()
 			end
 		end
 
@@ -557,14 +622,14 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 		-- Toggle
 		if isOverlay then
 			if enabled then
-				DrawString(drawX + drawWidth - 16, lineY + 3, "LEFT", 14, "VAR", "^7"..(subSec.collapsed and "+" or "-"))
+				DrawString(drawX + drawWidth - 16, lineY + 3, "LEFT", 14, "VAR", "^7"..((subSec.collapsed or subSec.autoCollapsed) and "+" or "-"))
 			end
 		else
 			SetDrawLayer(nil, 0)
 			self:DrawControls(viewPort, noTooltip and self.calcsTab.selControl)
 		end
 
-		if subSec.collapsed or not enabled then
+		if subSec.collapsed or subSec.autoCollapsed or not enabled then
 			if primary then
 				return
 			else
@@ -582,18 +647,21 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 						local textColor = rowData.color or "^7"
 						if rowData.label then
 							SetDrawColor(rowData.bgCol or "^0")
-							DrawImage(nil, drawX + 2, lineY + 2, 130, 18)
+							DrawImage(nil, drawX + 2, lineY + 2, labelWidth - 2, 18)
 							if self.calcsTab:SearchMatch(rowData.label) then
 								textColor = colorCodes.HIGHLIGHT
 							end
-							DrawString(drawX + 132, lineY + 2, "RIGHT_X", 16, "VAR", textColor..rowData.label.."^7:")
+							DrawString(drawX + labelWidth, lineY + 2, "RIGHT_X", 16, "VAR", textColor..rowData.label.."^7:")
 						end
 					elseif rowData.label then
-						DrawString(drawX + 132, lineY + 2, "RIGHT_X", 16, "VAR", "^7"..rowData.label.."^7:")
+						DrawString(drawX + labelWidth, lineY + 2, "RIGHT_X", 16, "VAR", "^7"..rowData.label.."^7:")
 					end
-					for _, colData in ipairs(rowData) do
-						local cellX = isOverlay and (drawX + (colData.xOffset or 134)) or colData.x
-						local cellW = isOverlay and (colData.width or (drawWidth - 136)) or colData.width
+					-- Variant A: damage tables (6 columns sharing the width) get column tints
+					local isDamageRow = damageTints and #rowData == 6 and subSec.data.colWidth ~= nil
+					local isDamageHeader = isDamageRow and not rowData.label
+					for colIndex, colData in ipairs(rowData) do
+						local cellX = isOverlay and (drawX + (colData.xOffset or (labelWidth + 2))) or colData.x
+						local cellW = isOverlay and (colData.width or (drawWidth - (labelWidth + 4))) or colData.width
 						local cellY = isOverlay and lineY + 2 or colData.y
 						local cellH = colData.height or 18
 
@@ -632,9 +700,33 @@ function CalcSectionClass:DrawContent(drawX, startLineY, drawWidth, actor, viewP
 									DrawImage(nil, cellX + 2, lineY + 2, cellW - 2, 18)
 								end
 
+								-- Variant A: soft per-element column tint (never over bgCol)
+								if isDamageRow and not rowData.bgCol and damageTints[colIndex] then
+									SetDrawColor(unpack(damageTints[colIndex]))
+									DrawImage(nil, cellX + lineWeight, lineY + 2, cellW - lineWeight - 1, 18)
+								end
+
 								local textSize = rowData.textSize or 14
+								local cellText = formatCalcStr(colData.format, actor, colData)
+								-- Variant A: dim cells whose value is a pure zero
+								local textCol = isZeroSummaryText(cellText) and "^8" or "^7"
+								if isDamageRow then
+									-- Bright element headers beat the zero-dim rule and override embedded element tags
+									local hdrColor = isDamageHeader and damageHeaderColors and damageHeaderColors[colIndex]
+									if hdrColor then
+										cellText = cellText:gsub("^%^x%x%x%x%x%x%x", ""):gsub("^%^%d", "")
+										textCol = hdrColor
+									end
+								end
+								if DrawStringWidth(textSize, "VAR", cellText) > cellW - 8 then
+									-- Anti-overflow: visually shorten "X to Y" ranges, then drop to 12px
+									cellText = cellText:gsub(" to ", "-")
+									if DrawStringWidth(textSize, "VAR", cellText) > cellW - 8 then
+										textSize = 12
+									end
+								end
 								SetViewport(cellX + 3, isOverlay and lineY + 2 or cellY, cellW - 4, 18)
-								DrawString(1, 9 - textSize / 2, "LEFT", textSize, "VAR", "^7"..formatCalcStr(colData.format, actor, colData))
+								DrawString(1, 9 - textSize / 2, "LEFT", textSize, "VAR", textCol..cellText)
 								SetViewport()
 							end
 						end

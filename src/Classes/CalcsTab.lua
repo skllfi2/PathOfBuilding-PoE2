@@ -7,6 +7,7 @@ local pairs = pairs
 local ipairs = ipairs
 local t_insert = table.insert
 local m_max = math.max
+local m_min = math.min
 local m_floor = math.floor
 
 local buffModeDropList = {
@@ -33,10 +34,20 @@ function CalcsTabClass:CalcsTab(build)
 	self.input.misc_buffMode = "EFFECTIVE"
 
 	self.colWidth = 230
+	self.labelWidth = 154
 	self.sectionList = { }
 
 	self.controls.search = new("EditControl"):EditControl({ "TOPLEFT", self, "TOPLEFT" }, { 4, 5, 260, 20 }, "", "Search", "%c", 100, nil, nil, nil, true)
 	t_insert(self.controls, self.controls.search)
+
+	-- Variant B: auto-collapse zero-value subsections (default on, persisted via self.input)
+	self.input.hideEmptySections = true
+	self.controls.hideEmpty = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", self.controls.search, "TOPRIGHT" }, { 8, 6, 18 }, "Hide empty", function(state)
+		self.input.hideEmptySections = state
+		self.build.buildFlag = true
+	end, "Automatically collapse subsections whose summary value is all zeros.\nClick the +/- button on a collapsed section to keep it expanded.", true)
+	self.controls.hideEmpty.labelRight = true
+	t_insert(self.controls, self.controls.hideEmpty)
 
 	-- Special section for skill/mode selection
 	self.socketGroupRow = { label = "Socket Group: Both", { controlName = "mainSocketGroup",
@@ -269,11 +280,27 @@ function CalcsTabClass:Draw(viewPort, inputEvents)
 	-- Arrange the sections
 	local baseX = viewPort.x + 4
 	local baseY = viewPort.y + 30
+	-- Variant A: adaptive column width — widen columns on wide viewports (230..275)
+	if viewPort.width >= 1340 then
+		self.colWidth = m_max(230, m_min(275, m_floor((viewPort.width - 40) / 5)))
+	else
+		self.colWidth = 230
+	end
+	-- Variant A: label column width — 154 default, smoothly shrinks to 132 on narrow windows
+	self.labelWidth = m_max(132, m_min(154, m_floor(132 + (viewPort.width - 700) * 22 / 200)))
+	-- Sync the auto-collapse checkbox with the persisted input value
+	self.controls.hideEmpty.state = self.input.hideEmptySections ~= false
 	local maxCol = m_floor(viewPort.width / (self.colWidth + 8))
 	if main.portraitMode then maxCol = 3 end
 	local colY = { }
 	local maxY = 0
 	for _, section in ipairs(self.sectionList) do
+		-- Variant A: keep the section width in sync with the adaptive column width
+		if section.widthCols == 1 then
+			section.width = self.colWidth
+		else
+			section.width = section.widthCols * self.colWidth + 8 * (section.widthCols - 1)
+		end
 		section:UpdateSize()
 		if section.enabled and not section.isOverlay then
 			local col
@@ -281,7 +308,7 @@ function CalcsTabClass:Draw(viewPort, inputEvents)
 				-- Group 1: Offense or 3 wide sections
 				-- This group is put into the first 3 columns, with each section placed into the highest available location
 				col = 1
-				if section.width == self.colWidth then -- if 1 col wide
+				if section.widthCols == 1 then -- if 1 col wide
 					local minY = colY[col] or baseY
 					for c = 2, 3 do
 						if (colY[c] or baseY) < minY then

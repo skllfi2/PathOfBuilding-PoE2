@@ -310,6 +310,22 @@ local Theme = {
 		overlayBorderDrag = nil, -- accent while the pane is being dragged
 		overlayHeaderBg = nil, -- elevated header strip
 		overlaySeparator = nil, -- hairline under the header
+		-- Variant A: damage-type column zoning for 6-column damage tables
+		-- (literal values on purpose: palette-independent, per TZ_OPENCODE_CALCS_OVERHAUL)
+		damageTints = {
+			{ 0.16, 0.17, 0.20, 0.35 }, -- All Types (neutral, bold total)
+			{ 0.24, 0.24, 0.26, 0.28 }, -- Physical (cold silver)
+			{ 0.28, 0.25, 0.08, 0.26 }, -- Lightning (muted amber)
+			{ 0.09, 0.18, 0.30, 0.30 }, -- Cold (muted icy blue)
+			{ 0.30, 0.13, 0.06, 0.28 }, -- Fire (muted warm)
+			{ 0.24, 0.08, 0.24, 0.28 }, -- Chaos (muted purple)
+		},
+		damageHeaderColors = {
+			[3] = "^xF0D050", -- Lightning
+			[4] = "^x68A8FF", -- Cold
+			[5] = "^xFF8844", -- Fire
+			[6] = "^xE060C0", -- Chaos
+		},
 	},
 	slider = {
 		radius = 3, -- track capsule

@@ -487,7 +487,7 @@ function buildMode:Init(dbFileName, buildName, buildXML, convertBuild, importLin
 		self.buildFlag = true
 	end)
 	self.controls.statBoxAnchor = new("Control"):Control({ "TOPLEFT", self.controls.mainSkillMinionSkillStatSet, "BOTTOMLEFT", true }, { 0, 2, 0, 0 })
-	self.controls.statBox = new("TextListControl"):TextListControl({ "TOPLEFT", self.controls.statBoxAnchor, "BOTTOMLEFT" }, { 0, 2, 300, 0 }, { { x = 170, align = "RIGHT_X" }, { x = 174, align = "LEFT" } })
+	self.controls.statBox = new("TextListControl"):TextListControl({ "TOPLEFT", self.controls.statBoxAnchor, "BOTTOMLEFT" }, { 0, 2, 300, 0 }, { { x = 185, align = "RIGHT_X" }, { x = 190, align = "LEFT" } })
 	self.controls.statBox.height = function(control)
 		local x, y = control:GetPos()
 		local warnHeight = main.showWarnings and #self.controls.warnings.lines > 0 and 18 or 0
@@ -1588,13 +1588,14 @@ function buildMode:OpenSavePopup(mode)
 		["UPDATE"] = "before updating?",
 	}
 	local controls = { }
-	controls.label = new("LabelControl"):LabelControl(nil, { 0, 20, 0, 16 }, "^7This build has unsaved changes.\nDo you want to save them " .. modeDesc[mode])
-	controls.save = new("ButtonControl"):ButtonControl(nil, { -90, 70, 80, 20 }, "Save", function()
+	controls.label1 = new("LabelControl"):LabelControl(nil, { 0, 22, 0, 16 }, "^7This build has unsaved changes.")
+	controls.label2 = new("LabelControl"):LabelControl(nil, { 0, 44, 0, 16 }, "^7Do you want to save them " .. modeDesc[mode])
+	controls.save = new("ButtonControl"):ButtonControl(nil, { -100, 82, 90, 20 }, "Save", function()
 		main:ClosePopup()
 		self.actionOnSave = mode
 		self:SaveDBFile()
 	end)
-	controls.noSave = new("ButtonControl"):ButtonControl(nil, { 0, 70, 80, 20 }, "Don't Save", function()
+	controls.noSave = new("ButtonControl"):ButtonControl(nil, { 0, 82, 95, 20 }, "Don't Save", function()
 		main:ClosePopup()
 		if mode == "LIST" then
 			self:CloseBuild()
@@ -1604,10 +1605,10 @@ function buildMode:OpenSavePopup(mode)
 			launch:ApplyUpdate(launch.updateAvailable)
 		end
 	end)
-	controls.close = new("ButtonControl"):ButtonControl(nil, { 90, 70, 80, 20 }, "Cancel", function()
+	controls.close = new("ButtonControl"):ButtonControl(nil, { 100, 82, 90, 20 }, "Cancel", function()
 		main:ClosePopup()
 	end)
-	main:OpenPopup(300, 100, "Save Changes", controls)
+	main:OpenPopup(340, 118, "Save Changes", controls)
 end
 
 function buildMode:OpenSaveAsPopup()
@@ -2410,10 +2411,21 @@ function buildMode:AddDisplayStatList(statList, actor, actorName)
 							if skillData.trigger and skillData.trigger ~= "" then
 								triggerStr = colorCodes.WARNING.." ("..skillData.trigger..")"..labelColor
 							end
+							local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+							local isItemRu = (main and main.itemLanguage) ~= "EN"
+							local skillName = skillData.name
+							if isUiRu and UITranslationsRU then
+								skillName = UITranslationsRU:Get(skillName) or skillName
+							elseif isItemRu then
+								local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+								if ItemNamesRU then
+									skillName = ItemNamesRU:Get(skillName) or skillName
+								end
+							end
 							local skillCount = skillData.count or 1
-							local lhsString = labelColor..skillData.name..triggerStr..":"
+							local lhsString = labelColor..skillName..triggerStr..":"
 							if skillCount ~= 1 then
-								lhsString = labelColor..s_format("%g", skillCount).."x "..skillData.name..triggerStr..":"
+								lhsString = labelColor..s_format("%g", skillCount).."x "..skillName..triggerStr..":"
 							end
 							t_insert(statBoxList, {
 								height = 16,
@@ -2421,17 +2433,29 @@ function buildMode:AddDisplayStatList(statList, actor, actorName)
 								self:FormatStat({fmt = "1.f"}, skillData.dps * skillCount, overCapStatVal),
 							})
 							if skillData.skillPart then
+								local partStr = skillData.skillPart
+								if isUiRu and UITranslationsRU then
+									partStr = UITranslationsRU:Get(partStr) or partStr
+								end
 								t_insert(statBoxList, {
 									height = 14,
 									align = "CENTER_X", x = 140,
-									"^8"..skillData.skillPart,
+									"^8"..partStr,
 								})
 							end
 							if skillData.source then
+								local sourceName = skillData.source
+								if isItemRu then
+									local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+									if ItemNamesRU then
+										sourceName = ItemNamesRU:Get(sourceName) or sourceName
+									end
+								end
+								local fromPrefix = isUiRu and "от " or "from "
 								t_insert(statBoxList, {
 									height = 14,
 									align = "CENTER_X", x = 140,
-									colorCodes.WARNING.."from " ..skillData.source,
+									colorCodes.WARNING..fromPrefix..sourceName,
 								})
 							end
 						end
@@ -2465,9 +2489,11 @@ function buildMode:AddDisplayStatList(statList, actor, actorName)
 							["^7"] = { 1, 1, 1 },
 						}
 						local breakdownColour = labelColor ~= "^7" and hexToRGB(labelColor) or colourCodeMap[labelColor]
+						local isRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+						local statLabel = (isRu and UITranslationsRU and UITranslationsRU:Get(statData.label)) or statData.label
 						t_insert(statBoxList, {
 							height = 16,
-							labelColor..statData.label..":",
+							labelColor..statLabel..":",
 							formattedStat,
 							breakdown = breakdown,
 							modNames = statData.modNames,
@@ -2485,8 +2511,10 @@ function buildMode:AddDisplayStatList(statList, actor, actorName)
 					end
 				end
 			elseif statData.label and statData.condFunc and statData.condFunc(actor.output) then
+				local isRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+				local statLabel = (isRu and UITranslationsRU and UITranslationsRU:Get(statData.label)) or statData.label
 				t_insert(statBoxList, {
-					height = 16, labelColor..statData.label..":",
+					height = 16, labelColor..statLabel..":",
 					"^7"..actor.output[statData.labelStat].."%^x808080" .. " (" .. statData.val  .. ")",})
 			elseif not statBoxList[#statBoxList] or statBoxList[#statBoxList][1] then
 				t_insert(statBoxList, { height = 6 })
@@ -2635,7 +2663,23 @@ function buildMode:CompareStatList(tooltip, statList, actor, baseOutput, compare
 
 				valStr = formatNumSep(valStr)
 
-				local line = s_format("%s%s%s %s", arrow, color, valStr, statData.label)
+				local isRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+				local statLabelMap = {
+					["Full DPS"] = "Полный урон в сек.",
+					["Combined DPS"] = "Общий урон в сек.",
+					["Total Life"] = "Всего здоровья",
+					["Energy Shield"] = "Энергетический щит",
+					["Effective Hit Pool"] = "Эфф. запас здоровья",
+					["Fire Resistance"] = "Сопротивление огню",
+					["Cold Resistance"] = "Сопротивление холоду",
+					["Lightning Resistance"] = "Сопротивление молнии",
+					["Chaos Resistance"] = "Сопротивление хаосу",
+					["Total Mana"] = "Всего маны",
+					["Armour"] = "Броня",
+					["Evasion"] = "Уклонение",
+				}
+				local dispLabel = (isRu and ((UITranslationsRU and UITranslationsRU:Get(statData.label)) or statLabelMap[statData.label])) or statData.label
+				local line = s_format("%s%s%s %s", arrow, color, valStr, dispLabel)
 				local pcPerPt = ""
 				if statData.compPercent and statVal1 ~= 0 and statVal2 ~= 0 then
 					local pc = statVal1 / statVal2 * 100 - 100
@@ -2681,11 +2725,13 @@ end
 do
 	local req = { }
 	function buildMode:AddRequirementsToTooltip(tooltip, level, str, dex, int, strBase, dexBase, intBase)
+		local isRu = (main and main.itemLanguage) ~= "EN"
 		if level and level > 0 then
+			local levelLabel = isRu and "Уровень " or "Level "
 			if tooltip.tooltipHeader ~= "GEM" then
-				t_insert(req, s_format("^x7F7F7FLevel %s%d", main:StatColor(level, nil, self.characterLevel), level))
+				t_insert(req, s_format("^x7F7F7F%s%s%d", levelLabel, main:StatColor(level, nil, self.characterLevel), level))
 			else
-				t_insert(req, s_format("^7Level %s%d", main:StatColor(level, nil, self.characterLevel), level))
+				t_insert(req, s_format("^7%s%s%d", levelLabel, main:StatColor(level, nil, self.characterLevel), level))
 			end
 		end
 		-- Convert normal attributes to Omni attributes
@@ -2699,27 +2745,33 @@ do
 			end
 			local omni = math.floor(highestAttribute * (100/omniSatisfy))
 			if omni and (omni > 0 or omni > self.calcsTab.mainOutput.Omni) then
-				t_insert(req, s_format("%s%d ^x7F7F7FOmni", main:StatColor(omni, 0, self.calcsTab.mainOutput.Omni), omni))
+				local omniLabel = isRu and "Всеведение" or "Omni"
+				t_insert(req, s_format("%s%d ^x7F7F7F%s", main:StatColor(omni, 0, self.calcsTab.mainOutput.Omni), omni, omniLabel))
 			end
 		else
 			local attrTextColor = (tooltip.tooltipHeader == "GEM") and "^7" or "^x7F7F7F"
+			local strLabel = isRu and "Силы" or (level and "Str" or "Strength")
+			local dexLabel = isRu and "Ловкости" or (level and "Dex" or "Dexterity")
+			local intLabel = isRu and "Интеллекта" or (level and "Int" or "Intelligence")
 			if str and (str > 7 or str > self.calcsTab.mainOutput.Str) then
-				t_insert(req, s_format("%s%d %s%s", main:StatColor(str, strBase, self.calcsTab.mainOutput.Str), str, attrTextColor, level and "Str" or "Strength"))
+				t_insert(req, s_format("%s%d %s%s", main:StatColor(str, strBase, self.calcsTab.mainOutput.Str), str, attrTextColor, strLabel))
 			end
 			if dex and (dex > 7 or dex > self.calcsTab.mainOutput.Dex) then
-				t_insert(req, s_format("%s%d %s%s", main:StatColor(dex, dexBase, self.calcsTab.mainOutput.Dex), dex, attrTextColor, level and "Dex" or "Dexterity"))
+				t_insert(req, s_format("%s%d %s%s", main:StatColor(dex, dexBase, self.calcsTab.mainOutput.Dex), dex, attrTextColor, dexLabel))
 			end
 			if int and (int > 7 or int > self.calcsTab.mainOutput.Int) then
-				t_insert(req, s_format("%s%d %s%s", main:StatColor(int, intBase, self.calcsTab.mainOutput.Int), int, attrTextColor, level and "Int" or "Intelligence"))
+				t_insert(req, s_format("%s%d %s%s", main:StatColor(int, intBase, self.calcsTab.mainOutput.Int), int, attrTextColor, intLabel))
 			end
 		end
 		if req[1] then
 			local fontSizeBig = main.showFlavourText and 18 or 16
+			local reqPrefix = isRu and "^x7F7F7FТребования: " or "^x7F7F7FRequires "
 			if tooltip.tooltipHeader ~= "GEM" then
-				tooltip:AddLine(fontSizeBig, "^x7F7F7FRequires "..table.concat(req, "^x7F7F7F, "), "FONTIN SC")
+				tooltip:AddLine(fontSizeBig, reqPrefix..table.concat(req, "^x7F7F7F, "), "FONTIN SC")
 				tooltip:AddSeparator(10)
 			else
-				tooltip:AddLine(fontSizeBig, "   ^x7F7F7FRequires: "..table.concat(req, "^7, "), "FONTIN SC")
+				local gemReqPrefix = isRu and "   ^x7F7F7FТребования: " or "   ^x7F7F7FRequires: "
+				tooltip:AddLine(fontSizeBig, gemReqPrefix..table.concat(req, "^7, "), "FONTIN SC")
 			end
 		end
 		wipeTable(req)

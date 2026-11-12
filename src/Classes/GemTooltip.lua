@@ -8,6 +8,65 @@ local m_min = math.min
 
 local GemTooltip = { }
 local GemNamesRU = LoadModule("Data/GemNamesRU")
+local SkillDescriptionsRU = LoadModule("Data/SkillDescriptionsRU")
+local ModTranslationsRU = LoadModule("Data/ModTranslationsRU")
+
+local GEM_TAGS_RU = {
+	["AoE"] = "Область",
+	["Area"] = "Область",
+	["Melee"] = "Ближний бой",
+	["Physical"] = "Физ.",
+	["Fire"] = "Огонь",
+	["Cold"] = "Холод",
+	["Lightning"] = "Молния",
+	["Chaos"] = "Хаос",
+	["Duration"] = "Длительность",
+	["Attack"] = "Атака",
+	["Spell"] = "Чары",
+	["Projectile"] = "Снаряд",
+	["Slam"] = "Мощный удар",
+	["Strike"] = "Удар",
+	["Warcry"] = "Боевой клич",
+	["Buff"] = "Эффект",
+	["Aura"] = "Аура",
+	["Minion"] = "Приспешники",
+	["Totem"] = "Тотем",
+	["Channelling"] = "Потоковое",
+	["Nova"] = "Кольцо",
+	["Hazard"] = "Опасность",
+	["Persistent"] = "Постоянное",
+	["Meta"] = "Мета",
+	["Trigger"] = "Срабатывание",
+	["Curse"] = "Проклятие",
+	["Mark"] = "Метка",
+	["Trap"] = "Ловушка",
+	["Mine"] = "Мина",
+	["Orb"] = "Сфера",
+	["Companion"] = "Спутник",
+	["Travel"] = "Перемещение",
+	["Guard"] = "Оборона",
+	["Shapeshift"] = "Перевоплощение",
+	["Bear"] = "Медведь",
+	["Wolf"] = "Волк",
+	["Wyvern"] = "Виверна",
+	["Payoff"] = "Расплата",
+	["Detonator"] = "Подрыв",
+	["Herald"] = "Вестник",
+	["Lineage"] = "Родословная",
+	["Support"] = "Поддержка",
+	["Sustained"] = "Поддерживаемое",
+	["Storm"] = "Буря",
+}
+
+local function translateTagString(tagStr)
+	if not tagStr or tagStr == "" then return tagStr end
+	local out = { }
+	for tag in tagStr:gmatch("[^,]+") do
+		local t = tag:match("^%s*(.-)%s*$")
+		out[#out + 1] = GEM_TAGS_RU[t] or t
+	end
+	return table.concat(out, ", ")
+end
 
 local function getFontSizes()
 	return main.showFlavourText and 18 or 16, main.showFlavourText and 24 or 20
@@ -15,6 +74,10 @@ end
 
 local function addDescriptionLine(tooltip, build, statSet, line, stat, index, colorCode)
 	local fontSizeBig = getFontSizes()
+	local itemLang = (main and main.itemLanguage) or "DUAL"
+	if itemLang ~= "EN" then
+		line = ModTranslationsRU:Translate(line) or line
+	end
 	local source = statSet.statMap[stat] or build.data.skillStatMap[stat]
 	local bg = (index % 2 == 0) and "GemHoverModBg" or nil
 	if source then
@@ -33,7 +96,10 @@ local function addDescriptionLine(tooltip, build, statSet, line, stat, index, co
 			line = line .. " ^1" .. stat
 		end
 		line = colorCodes.UNSUPPORTED .. line
-		line = main.notSupportedModTooltips and (line .. main.notSupportedTooltipText) or line
+		if main.notSupportedModTooltips then
+			local nsText = (itemLang ~= "EN") and " ^8(Пока не поддерживается в PoB)" or main.notSupportedTooltipText
+			line = line .. nsText
+		end
 		tooltip:AddLine(fontSizeBig, line, "FONTIN SC", bg)
 	end
 end
@@ -215,7 +281,12 @@ local function addGrantedEffectInfo(tooltip, build, gemInstance, grantedEffect, 
 	tooltip.center = true
 	if grantedEffect.description then
 		tooltip:AddSeparator(10)
-		tooltip:AddLine(fontSizeBig, colorCodes.GEMDESCRIPTION .. grantedEffect.description, "FONTIN ITALIC")
+		local itemLang = (main and main.itemLanguage) or "DUAL"
+		local desc = grantedEffect.description
+		if itemLang ~= "EN" and SkillDescriptionsRU then
+			desc = SkillDescriptionsRU:Get(desc) or desc
+		end
+		tooltip:AddLine(fontSizeBig, colorCodes.GEMDESCRIPTION .. desc, "FONTIN ITALIC")
 	end
 	if displayInstance.corrupted == true then
 		tooltip:AddSeparator(10)
@@ -339,7 +410,7 @@ function GemTooltip.AddGemTooltip(tooltip, build, gemInstance, options)
 	end
 
 	local iconNameIndent = "            "
-	local iconTagIndent = "                  "
+	local iconTagIndent = "                     "
 	if grantedEffect.support then
 		iconNameIndent = "    "
 	 	iconTagIndent = "      "
@@ -354,7 +425,7 @@ function GemTooltip.AddGemTooltip(tooltip, build, gemInstance, options)
 		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. (ruTitle or enTitle), "FONTIN SC")
 	elseif itemLang == "DUAL" and ruTitle and ruTitle ~= enTitle then
 		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. ruTitle, "FONTIN SC")
-		tooltip:AddLine(fontSizeBig, "^8" .. iconNameIndent .. enTitle, "FONTIN SC")
+		tooltip:AddLine(fontSizeBig, "^8" .. iconTagIndent .. "(" .. enTitle .. ")", "FONTIN SC")
 	else
 		tooltip:AddLine(fontSizeTitle, colorCodes.GEM .. iconNameIndent .. enTitle, "FONTIN SC")
 	end
@@ -375,7 +446,8 @@ function GemTooltip.AddGemTooltip(tooltip, build, gemInstance, options)
 		tooltip:AddLine(fontSizeBig, colorCodes.WARNING .. "   Gem only exists in Standard League", "FONTIN SC")
 	end
 	if gemInstance.gemData.tagString ~= "" then
-		tooltip:AddLine(fontSizeBig, "   ^x7F7F7F" .. gemInstance.gemData.tagString, "FONTIN")
+		local dispTags = (itemLang ~= "EN") and translateTagString(gemInstance.gemData.tagString) or gemInstance.gemData.tagString
+		tooltip:AddLine(fontSizeBig, "   ^x7F7F7F" .. dispTags, "FONTIN")
 	end
 	if gemInstance.gemData.gemFamily then
 		tooltip:AddLine(fontSizeBig, colorCodes.GEMINFO .. "   Category: ^7" .. gemInstance.gemData.gemFamily, "FONTIN SC")

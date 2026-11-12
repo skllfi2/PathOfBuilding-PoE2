@@ -24,6 +24,7 @@ LoadModule("Modules/CalcTools")
 LoadModule("Modules/BuildSiteTools")
 UIFont = LoadModule("Modules/UIFont")
 WindowState = LoadModule("Modules/WindowState")
+RULogger = LoadModule("Modules/RULogger")
 
 --[[if launch.devMode then
 	for skillName, skill in pairs(data.enchantments.Helmet) do
@@ -48,6 +49,50 @@ end
 
 local tempTable1 = { }
 local tempTable2 = { }
+
+UITranslationsRU = LoadModule("Data/UITranslationsRU")
+-- Load additional translations from ui_strings_ru.json into the UI dictionary
+local ruJsonPath = GetScriptPath() .. "/Data/ui_strings_ru.json"
+local ruFile = io.open(ruJsonPath, "r")
+if ruFile then
+    local ruJson = ruFile:read("*all")
+    ruFile:close()
+    UITranslationsRU:LoadJSON(ruJson)
+end
+
+-- Global Display-Only UI Translation Hook
+if DrawString then
+	local raw_DrawString = DrawString
+	local raw_DrawStringWidth = DrawStringWidth
+
+	local function translateForRender(text, allowLog)
+		if not text or type(text) ~= "string" or text == "" then
+			return text
+		end
+		if not UITranslationsRU or (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN"))) then
+			return text
+		end
+
+		local tr = UITranslationsRU:Get(text)
+		if tr and tr ~= text then
+			return tr
+		end
+		-- Log untranslated/missed string (source: "UI", only from DrawString, not DrawStringWidth word-wrap probes)
+		if allowLog and RULogger and main and main.logUntranslatedRU then
+			RULogger.Log("UI", text)
+		end
+
+		return text
+	end
+
+	function DrawString(x, y, align, height, font, text)
+		return raw_DrawString(x, y, align, height, font, translateForRender(text, true))
+	end
+
+	function DrawStringWidth(height, font, text)
+		return raw_DrawStringWidth(height, font, translateForRender(text, false))
+	end
+end
 
 main = new("ControlHost"):ControlHost()
 
@@ -123,7 +168,9 @@ function main:Init()
 	self.errorReadingSettings = false
 	self.uiFont = UIFont.defaultPreset
 	self.uiAccent = "PoE2 Gold"
+	self.uiLanguage = "RU"
 	self.itemLanguage = "DUAL"
+	self.logUntranslatedRU = false
 
 	if not SetDPIScaleOverridePercent then SetDPIScaleOverridePercent = function(scale) end end
 
@@ -156,6 +203,7 @@ function main:Init()
 	-- The window already exists at this point, so the stored geometry can be
 	-- restored (the settings have been read by ChangeUserPath above).
 	self:ApplyWindowState()
+	RULogger.Init()
 
 	---@type ItemDBData
 	self.uniqueDB = { list = {}, loading = true }
@@ -380,6 +428,9 @@ end
 function main:Shutdown()
 	self:CallMode("Shutdown")
 	self:SaveSettings()
+	if RULogger then
+		RULogger.Shutdown()
+	end
 end
 
 function main:OnFrame()
@@ -524,6 +575,15 @@ function main:OnFrame()
 	itemLib.wiki.triggered = false
 
 	wipeTable(self.inputEvents)
+
+	-- Periodic RULogger flush (every 2 seconds)
+	if RULogger then
+		local now = GetTime()
+		if not RULogger._lastFlush or (now - RULogger._lastFlush) >= 2.0 then
+			RULogger.Flush()
+			RULogger._lastFlush = now
+		end
+	end
 
 	-- TODO: this pattern may pose memory management issues for classes that don't exist for the lifetime of the program
 	for _, onFrameFunc in pairs(self.onFrameFuncs) do
@@ -728,6 +788,12 @@ function main:LoadSettings(ignoreBuild)
 				if node.attrib.uiAccent then
 					self.uiAccent = node.attrib.uiAccent
 				end
+				if node.attrib.uiLanguage then
+					local ulang = node.attrib.uiLanguage
+					if ulang == "EN" or ulang == "RU" then
+						self.uiLanguage = ulang
+					end
+				end
 				if node.attrib.itemLanguage then
 					local lang = node.attrib.itemLanguage
 					if lang == "EN" or lang == "RU" or lang == "DUAL" then
@@ -919,6 +985,7 @@ function main:SaveSettings()
 		dpiScaleOverridePercent = tostring(self.dpiScaleOverridePercent),
 		uiFont = self.uiFont or "authentic",
 		uiAccent = self.uiAccent or "PoE2 Gold",
+		uiLanguage = self.uiLanguage or "RU",
 		itemLanguage = self.itemLanguage or "DUAL"
 	}
 	-- Persist the current window geometry (position, size, maximised flag) so
@@ -1026,20 +1093,22 @@ function main:OpenOptionsPopup(savedState)
 		dpiScaleOverridePercent = self.dpiScaleOverridePercent,
 		uiFont = self.uiFont or UIFont.defaultPreset,
 		uiAccent = self.uiAccent or "PoE2 Gold",
+		uiLanguage = self.uiLanguage or "RU",
 		itemLanguage = self.itemLanguage or "DUAL",
 	}
 
 	-- NOTE: Height needs to be adjusted if more menu options are added
-	local oneColumnHeightReq = 850 -- Min height required to not split menu into two columns
+	local oneColumnHeightReq = 980 -- Min height required to fit single column comfortably without scrolling
 	local columnWidth = 600
 
 	local startingY = 20
 	local currentY = startingY
 	local currentX = 0 -- initialized at `0`, only used for two-column layouts
 
-	-- Determine layout limits and modes
-	local useTwoColumns = self.screenH < oneColumnHeightReq and self.screenW >= columnWidth * 2
-	local useScrollBar = self.screenH < oneColumnHeightReq and not useTwoColumns
+	-- Determine layout limits and modes (always allow vertical scrollbar when single-column exceeds viewport cap)
+	local maxSingleColHeight = m_min(740, self.screenH - 30)
+	local useTwoColumns = false
+	local useScrollBar = true
 	local scrollBarWidth = useScrollBar and 18 or 0
 
 	local popupWidth = useTwoColumns and columnWidth * 2 or columnWidth
@@ -1159,6 +1228,35 @@ function main:OpenOptionsPopup(savedState)
 	controls.uiAccentLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.uiAccent, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Accent Color:")
 	controls.uiAccent.tooltipText = "Accent colour of the Fluent UI theme (buttons, checkboxes, slider fill, selection highlights).\nSwitches live; the setting is saved with Options."
 	controls.uiAccent:SelByValue(savedState.uiAccent, "accent")
+
+	nextRow()
+	controls.uiLanguage = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 200, 18 }, {
+		{ label = "Русский", lang = "RU" },
+		{ label = "English", lang = "EN" },
+	}, function(index, value)
+		self.uiLanguage = value.lang
+	end)
+	controls.uiLanguageLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.uiLanguage, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7UI Language:")
+	controls.uiLanguage.tooltipText = "Language of the application interface (tabs, buttons, menus, settings)."
+	controls.uiLanguage:SelByValue(savedState.uiLanguage, "lang")
+
+	nextRow()
+	controls.itemLanguage = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 200, 18 }, {
+		{ label = "English (Original)", lang = "EN" },
+		{ label = "Русский (RU)", lang = "RU" },
+		{ label = "Dual (Русский + English)", lang = "DUAL" },
+	}, function(index, value)
+		self.itemLanguage = value.lang
+	end)
+	controls.itemLanguageLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.itemLanguage, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Game Language:")
+	controls.itemLanguage.tooltipText = "Language used for items, skills, mods, and passive tree nodes.\nInternal identifiers remain in English for calculation compatibility.\nDual shows Russian on the first line and English in grey on the second line."
+	controls.itemLanguage:SelByValue(savedState.itemLanguage, "lang")
+
+	nextRow()
+	controls.logUntranslatedRU = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Log untranslated RU strings:", function(state)
+		self.logUntranslatedRU = state
+	end, "Writes any untranslated English strings encountered in the live UI/Tooltips to src/untranslated_live.log for review.")
+	controls.logUntranslatedRU.state = self.logUntranslatedRU == true
 
 	nextRow()
 	controls.colorPositive = new("EditControl"):EditControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 100, 18 }, tostring(self.colorPositive:gsub('^(^)', '0')), nil, nil, 8, function(buf)
@@ -1337,18 +1435,6 @@ function main:OpenOptionsPopup(savedState)
 	controls.sideBySideItemComparison.state = self.sideBySideItemComparison
 
 	nextRow()
-	controls.itemLanguage = new("DropDownControl"):DropDownControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 200, 18 }, {
-		{ label = "English (Original)", lang = "EN" },
-		{ label = "Русский (RU)", lang = "RU" },
-		{ label = "Dual (Русский + English)", lang = "DUAL" },
-	}, function(index, value)
-		self.itemLanguage = value.lang
-	end)
-	controls.itemLanguageLabel = new("LabelControl"):LabelControl({ "RIGHT", controls.itemLanguage, "LEFT" }, { defaultLabelSpacingPx, 0, 0, 16 }, "^7Item Names Language:")
-	controls.itemLanguage.tooltipText = "Language used for item base and unique names in tooltips.\nInternal item identifiers remain in English for calculation compatibility.\nDual shows Russian on the first line and English in grey on the second line."
-	controls.itemLanguage:SelByValue(savedState.itemLanguage, "lang")
-
-	nextRow()
 	controls.invertSliderScrollDirection = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", controls.sectionAnchor, "TOPLEFT" }, { currentX + defaultLabelPlacementX, currentY, 20 }, "^7Invert slider scroll direction:", function(state)
 		self.invertSliderScrollDirection = state
 	end)
@@ -1457,6 +1543,7 @@ function main:OpenOptionsPopup(savedState)
 		SetDPIScaleOverridePercent(self.dpiScaleOverridePercent)
 		self.uiFont = savedState.uiFont
 		self.uiAccent = savedState.uiAccent
+		self.uiLanguage = savedState.uiLanguage
 		self.itemLanguage = savedState.itemLanguage
 		local ThemeFluent = LoadModule("Modules/ThemeFluent")
 		if ThemeFluent and ThemeFluent.SetAccent then
@@ -1465,11 +1552,14 @@ function main:OpenOptionsPopup(savedState)
 		main:ClosePopup()
 	end)
 
-	local popupHeight = useScrollBar and (self.screenH - 20) or currentY + 30
+	local popupHeight = useScrollBar and m_min(maxSingleColHeight, currentY + 55) or (currentY + 55)
+	if useScrollBar and (currentY + 55) <= maxSingleColHeight then
+		useScrollBar = false
+	end
 
 	if useScrollBar then
 		controls.scrollBar = new("ScrollBarControl"):ScrollBarControl({ "TOPRIGHT", nil, "TOPRIGHT" }, { -2, 25, scrollBarWidth, popupHeight - 65 }, 50, "VERTICAL", true)
-		controls.scrollBar:SetContentDimension(currentY, popupHeight - 65)
+		controls.scrollBar:SetContentDimension(currentY + 16, popupHeight - 65)
 	end
 
 	local function scrollBarFunc()
@@ -1515,6 +1605,7 @@ function main:OpenOptionsPopup(savedState)
 				dpiScaleOverridePercent = self.dpiScaleOverridePercent,
 				uiFont = self.uiFont or UIFont.defaultPreset,
 				uiAccent = self.uiAccent or "PoE2 Gold",
+				uiLanguage = self.uiLanguage or "RU",
 				itemLanguage = self.itemLanguage or "DUAL",
 			}
 			self:ClosePopup()
@@ -1919,10 +2010,11 @@ function main:OpenMessagePopup(title, msg)
 		t_insert(controls, new("LabelControl"):LabelControl(nil, { 0, 20 + numMsgLines * 16, 0, 16 }, line))
 		numMsgLines = numMsgLines + 1
 	end
-	controls.close = new("ButtonControl"):ButtonControl(nil, { 0, 40 + numMsgLines * 16, 80, 20 }, "Ok", function()
+	local closeWidth = m_max(80, DrawStringWidth(16, "VAR", "Ok") + 10)
+	controls.close = new("ButtonControl"):ButtonControl(nil, { -m_ceil(closeWidth / 2), 40 + numMsgLines * 16, closeWidth, 20 }, "Ok", function()
 		main:ClosePopup()
 	end)
-	return self:OpenPopup(m_max(DrawStringWidth(16, "VAR", msg) + 30, 190), 70 + numMsgLines * 16, title, controls, "close")
+	return self:OpenPopup(m_max(DrawStringWidth(16, "VAR", msg) + 30, closeWidth + 40), 70 + numMsgLines * 16, title, controls, "close")
 end
 
 function main:OpenConfirmPopup(title, msg, confirmLabel, onConfirm, extraLabel, onExtra)
@@ -2129,15 +2221,20 @@ end
 
 do
 	local wrapTable = { }
-	function main:WrapString(str, height, width)
+	function main:WrapString(str, height, width, font)
 		wipeTable(wrapTable)
 		local lineStart = 1
 		local lastSpace, lastBreak
+		local fontName = font or "VAR"
 		while true do
 			local s, e = str:find("%s+", lastSpace)
 			if not s then
 				s = #str + 1
 				e = #str + 1
+			end
+			if DrawStringWidth(height, fontName, str:sub(lineStart, s - 1)) > width and lastBreak and lastBreak >= lineStart then
+				t_insert(wrapTable, str:sub(lineStart, lastBreak))
+				lineStart = lastSpace
 			end
 			if s > #str then
 				t_insert(wrapTable, str:sub(lineStart, -1))
@@ -2145,10 +2242,6 @@ do
 			end
 			lastBreak = s - 1
 			lastSpace = e + 1
-			if DrawStringWidth(height, "VAR", str:sub(lineStart, s - 1)) > width then
-				t_insert(wrapTable, str:sub(lineStart, lastBreak))
-				lineStart = lastSpace
-			end
 		end
 		return wrapTable
 	end

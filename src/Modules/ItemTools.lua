@@ -10,6 +10,7 @@ local m_max = math.max
 local m_floor = math.floor
 
 itemLib = { }
+local ModTranslationsRU = LoadModule("Data/ModTranslationsRU")
 
 local function addRuneforgingBaseMappings(item, bases)
 	-- Older records can omit the current variant's base tag and rely on the header.
@@ -444,16 +445,29 @@ function itemLib.formatModLine(modLine, dbMode, skipUnsupported)
 	if modLine.disabled then
 		return colorCodes.DISABLED .. line
 	end
+	local itemLang = (main and main.itemLanguage) or "DUAL"
+	local isRu = (itemLang ~= "EN") and not launch.devModeAlt
+
+	-- Mod localization display layer (D-026)
+	if isRu and ModTranslationsRU then
+		local ruLine = ModTranslationsRU:Translate(line)
+		if ruLine and ruLine ~= line then
+			line = ruLine
+		end
+	end
+
 	local colorCode
 	if modLine.extra and not skipUnsupported then
 		colorCode = colorCodes.UNSUPPORTED
-		line = main.notSupportedModTooltips and (line .. main.notSupportedTooltipText) or line
+		local notSupp = isRu and " (Пока не поддерживается в PoB)" or main.notSupportedTooltipText
+		line = main.notSupportedModTooltips and (line .. notSupp) or line
 		if launch.devModeAlt then
 			line = line .. "   ^1'" .. modLine.extra .. "'"
 		end
 	else
 		colorCode = (modLine.fractured and colorCodes.FRACTURED) or (modLine.crafted and colorCodes.CRAFTED) or (modLine.enchant and colorCodes.ENCHANTED) or (modLine.mutated and colorCodes.MUTATED) or (modLine.custom and (not modLine.desecrated and colorCodes.CUSTOM)) or colorCodes.MAGIC
 	end
+
 	return colorCode..line
 end
 

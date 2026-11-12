@@ -13,6 +13,42 @@ local m_cos = math.cos
 local m_pi = math.pi
 local band = AND64  -- bit.band
 
+local okItemRU, ItemNamesRU = pcall(LoadModule, "Data/ItemNamesRU")
+if not okItemRU then ItemNamesRU = nil end
+local okGemRU, GemNamesRU = pcall(LoadModule, "Data/GemNamesRU")
+if not okGemRU then GemNamesRU = nil end
+
+local function localizeCellValue(row, col)
+	local val = row[col.key]
+	if not val or type(val) ~= "string" then
+		return val
+	end
+	if col.key == "sourceName" and main and main.itemLanguage ~= "EN" then
+		if row.source == "Item" and ItemNamesRU then
+			local tr = ItemNamesRU:Get(val)
+			if tr and tr ~= val then
+				return tr
+			end
+			local parts = { }
+			local changed = false
+			for part in (val .. ", "):gmatch("(.-), ") do
+				local trPart = ItemNamesRU:Get(part)
+				if trPart and trPart ~= part then changed = true end
+				t_insert(parts, trPart or part)
+			end
+			if changed and #parts > 0 then
+				return table.concat(parts, ", ")
+			end
+		elseif row.source == "Skill" and GemNamesRU then
+			local tr = GemNamesRU:Get(val)
+			if tr and tr ~= val then
+				return tr
+			end
+		end
+	end
+	return val
+end
+
 ---@class CalcBreakdownControl: Control, ControlHost
 local CalcBreakdownClass = newClass("CalcBreakdownControl", "Control", "ControlHost")
 
@@ -112,12 +148,13 @@ function CalcBreakdownClass:SetBreakdownData(displayData, pinned, forceActor)
 			section.width = 4
 			for _, col in pairs(section.colList) do
 				for _, row in pairs(section.rowList) do
-					if row[col.key] then
-						local _, num = string.gsub(row[col.key], "%d%d%d%d", "") -- count how many commas will be added
+					local cellVal = localizeCellValue(row, col)
+					if cellVal then
+						local _, num = string.gsub(cellVal, "%d%d%d%d", "") -- count how many commas will be added
 						if main.showThousandsSeparators and num > 0 then
-							col.width = m_max(col.width or 0, DrawStringWidth(16, "VAR", col.label) + 6, DrawStringWidth(12, "VAR", row[col.key]) + 6 + (4 * num))
+							col.width = m_max(col.width or 0, DrawStringWidth(16, "VAR", col.label) + 6, DrawStringWidth(12, "VAR", cellVal) + 6 + (4 * num))
 						else
-							col.width = m_max(col.width or 0, DrawStringWidth(16, "VAR", col.label) + 6, DrawStringWidth(12, "VAR", row[col.key]) + 6)
+							col.width = m_max(col.width or 0, DrawStringWidth(16, "VAR", col.label) + 6, DrawStringWidth(12, "VAR", cellVal) + 6)
 						end
 					end
 				end
@@ -617,17 +654,18 @@ function CalcBreakdownClass:DrawBreakdownTable(viewPort, x, y, section)
 		SetDrawColor(0.5, 0.5, 0.5)
 		DrawImage(nil, x + 2, rowY - 1, section.width - 4, 1)
 		for _, col in ipairs(section.colList) do
-			if col.width and row[col.key] then
+			local cellVal = localizeCellValue(row, col)
+			if col.width and cellVal then
 				-- This row has an entry for this column, draw it
-				local _, alpha = string.gsub(row[col.key], "%a", " ") -- counts letters in the string
-				local _, notes = string.gsub(row[col.key], " to ", " ") -- counts " to " in the string
-				local _, paren = string.gsub(row[col.key], "%b()", " ") -- counts parenthesis in the string
+				local _, alpha = string.gsub(cellVal, "%a", " ") -- counts letters in the string
+				local _, notes = string.gsub(cellVal, " to ", " ") -- counts " to " in the string
+				local _, paren = string.gsub(cellVal, "%b()", " ") -- counts parenthesis in the string
 				if (alpha == 0 or notes > 0 or paren > 0) and col.right then
-					DrawString(col.x + col.width - 4, rowY + 1, "RIGHT_X", 12, "VAR", "^7"..formatNumSep(tostring(row[col.key])))
+					DrawString(col.x + col.width - 4, rowY + 1, "RIGHT_X", 12, "VAR", "^7"..formatNumSep(tostring(cellVal)))
 				elseif (alpha == 0 or notes > 0 or paren > 0) then
-					DrawString(col.x, rowY + 1, "LEFT", 12, "VAR", "^7"..formatNumSep(tostring(row[col.key])))
+					DrawString(col.x, rowY + 1, "LEFT", 12, "VAR", "^7"..formatNumSep(tostring(cellVal)))
 				else
-					DrawString(col.x, rowY + 1, "LEFT", 12, "VAR", "^7"..tostring(row[col.key]))
+					DrawString(col.x, rowY + 1, "LEFT", 12, "VAR", "^7"..tostring(cellVal))
 				end
 				local ttFunc = row[col.key.."Tooltip"]
 				local ttNode = row[col.key.."Node"]

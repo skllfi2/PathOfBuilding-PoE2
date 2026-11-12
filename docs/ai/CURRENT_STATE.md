@@ -1,6 +1,136 @@
 # PoB2Fork — Current State
 
-Дата зафиксированного состояния: 2026-11-07.
+Дата зафиксированного состояния: 2026-11-12.
+- **D-050 (2026-11-12): Тултипы, фикс `WrapString`, `CalcBreakdownRU`, `ConfigTooltipsRU` и автоматизация аудита:**
+  - **Main.lua & Tooltip.lua:** `main:WrapString` теперь переносит до переполняющего слова и учитывает шрифт `fontToUse` (`self.maxWidth - H_PAD - 4`), устранив выход текста за границы 450 px карточек Side-by-Side; в `Options` добавлен чекбокс `logUntranslatedRU`.
+  - **UITranslationsRU.lua:** исправлен multiline `gmatch` (убрано наложение в `PartyTab`), добавлены 45+ тултипов `Options`/вкладок, предупреждения `BuildDisplayStats`, `Active Skill #N`, `Скор. передв. навыка`.
+  - **CalcBreakdownRU.lua & ConfigTooltipsRU.lua (новые) + CalcBreakdownControl.lua:** системный перевод детализаций `Calcs` (~170+ пояснений, таблицы AoE/EHP/уклонения/состояний, `localizeCellValue` для `ItemNamesRU`/`GemNamesRU`) и >260 динамических подсказок `Config`.
+  - **GemTooltip.lua / SkillsTab.lua / SkillDescriptionsRU.lua / ModTranslationsRU.lua:** фикс отступа `iconTagIndent`, теги `Sustained`/`Storm`, опечатка в `Грозе`, имена камней в `AddSocketGroupTooltip`, `Deals X to Y <Type> Damage`.
+  - **Автоаудит (`scratch/`):** `ast_audit_ru.py` (3 307 выражений) и `headless_audit_ru.lua` (обход всех 9 вкладок, `tooltipFunc` и `player.breakdown` в `host.exe`; пропуски снижены с 484 до 83).
+  - **Верификация (`host.exe`, из `src/`):** `verify_tooltips_ru.lua` **26/26**, `verify_final_all.lua` **SYNTAX 16/16 OK**, **TREE_COVERAGE 4482/4496 (99.69%)**, `verify_5_screenshots.lua` **44/44**. Бэкапы: `Snapshots/PoB2-Tooltips-20261112/`.
+- **D-049 (2026-11-12): Разделение `uiLanguage`/`itemLanguage`, скролл в Options, правки NotesTab/ItemListControl и снятие ограничения `#ruStats == #node.sd`:**
+  - **Main.lua:** независимая настройка `main.uiLanguage = "RU"` (в `Settings.xml` и Options), вертикальный скроллбар в окне `Options` (`useScrollBar = true`), `self.logUntranslatedRU = false` по умолчанию.
+  - **PassiveTreeView.lua:** снято жёсткое сравнение `#ruStats == #node.sd`, добавлен вывод `extraRuLines` при `i == #node.sd and #ruStats > #node.sd`.
+  - **NotesTab.lua / ItemListControl.lua:** подсказка в `NotesTab` разбита на 3 `LabelControl` без наложения на кнопки; в `ItemListControl` статусы `(Не используется)` / `(В наборе '...')` привязаны к `uiLanguage`, а имена предметов — к `itemLanguage`.
+  - **Верификация (`host.exe`, из `src/`):** `verify_final_all.lua` — **SYNTAX 16/16 OK**, **TREE_COVERAGE 4482/4496 (99.69%)**; `verify_lang_split.lua` — **PASS**; `verify_4_screenshots.lua` — **11/11 PASS**; `verify_5_screenshots.lua` — **44/44 PASS**.
+- **D-048 (2026-11-12): Runtime Miss Logger + системные фиксы UITranslationsRU:Get() (ТЗ TZ_OpenCode_Runtime_Miss_Logger.md):**
+  - **UITranslationsRU.lua fixes:** Убраны лишние квадратные скобки из значений (`[PoE2]`→`PoE2`, `[Maxroll]`→`Maxroll`, `[Control]`→`Control` и др.); добавлен построчный fallback для `\n`-строк в `Get()`; добавлен `Label: Value` fallback (перевод левой части и правой части отдельно).
+  - **RULogger.lua (новый модуль):** `src/Modules/RULogger.lua` — логирует непереведённые строки из живого UI с дедупликацией, фильтрами технических токенов, записью в `untranslated_live.log` с флешем каждые 2 сек.
+  - **Интеграция:** `Main.lua` — `translateForRender` логирует промахи (источник "UI"); `Tooltip.lua:AddLine` — источник "TOOLTIP"; `ModTranslationsRU:Translate` — источник "MOD"; `PassiveTreeView.lua` — источник "TREE".
+  - **verify_runtime_logger.lua:** **13/13 PASS** (multiline, Label:Value, EN passthrough, safety).
+  - **Регрессия:** `verify_dialogs.lua` **58/58**, `verify_5_screenshots.lua` **44/44**, `verify_tree100_ru.lua` **29/29**, `calcs_check.lua` **ALL PASS**, `batch13` **34/34**, `batch14` **43/43**, `batch15` **70/70**, `test_stat_describer_e2e.lua` **PASS**.
+  - **Бэкапы:** `backup_ui_fix/20261112-113531-runtime-miss-logger/`.
+
+- **D-047 (2026-11-12): Полный перевод 1 005 строк интерфейса (ТЗ TZ_OpenCode_Remaining_UI_100pct.md):**
+  - **ui_to_translate_clean.json:** все 1 005 записей заполнены (0 пустых "ru": ""), цветовые теги (^7, ^8, ^x...), \n, \t и плейсхолдеры (%d, %s, {0}) сохранены.
+  - **UITranslationsRU.lua:** +1 005 записей в self.map (append-only, без перезаписи существующих компактных переводов). 494 новых ключей добавлено.
+  - **Верификация (host.exe):** verify_ui_1005.lua — TOTAL=1005, TRANSLATED=1005, UNTRANSLATED=0 (100.0% >= 98% порог).
+  - **Бэкапы:** backup_ui_fix/20261112-110548-ui-1005/.
+
+- **D-046 (2026-11-12): Полный аудит и локализация всех диалоговых окон и UI (ТЗ TZ_OpenCode_Full_Dialogs_and_UI_Sweep.md):**
+  - **Python-сканер:** `scratch/audit_ui_dialogs.py` + `scratch/audit_ui_dialogs_host.lua` — сканирует все .lua в `src/Classes/` + `src/Modules/` (Export/ исключён), находит вызовы `OpenPopup`/`OpenConfirmPopup`/`OpenMessagePopup`/`PopupDialog`, атрибуты контролов `label`/`tooltip`/`prompt`/`placeholder`, `tooltip:AddLine`, разделяя на статические и динамические строки.
+  - **Аудит ДО (host.exe):** `scratch/audit_ui_dialogs_before.txt` — TOTAL=2400, TRANSLATED=1725, UNTRANSLATED=675.
+  - **UITranslationsRU.lua:** добавлено ~70 новых статических переводов (заголовки диалогов, кнопки, надписи контролов, подтверждения удаления) + динамические паттерны `Get()` для ошибок файловых операций, подтверждений удаления, импорта/экспорта, Class Change.
+  - **Экранирование % в gsub:** все подставляемые аргументы экранируются через `val:gsub("%%", "%%%%")`; `|` не используется в Lua-паттернах.
+  - **Main.lua `OpenMessagePopup`:** кнопка "Ok" использует динамическую ширину через `DrawStringWidth`.
+  - **Аудит ПОСЛЕ (host.exe):** `scratch/audit_ui_dialogs_after.txt` — TOTAL=2400, TRANSLATED=1772, UNTRANSLATED=628 (+47 переводов).
+  - **verify_dialogs.lua:** **58/58 PASS**. Регрессия: `calcs_check.lua` **ALL PASS**, `batch13` **34/34**, `batch14` **43/43**, `batch15` **70/70**, `verify_tree100_ru.lua` **29/29**, `verify_5_screenshots.lua` **44/44**, `test_stat_describer_e2e.lua` **PASS**.
+  - **Бэкапы:** `backup_ui_fix/20261112-095210-ui-dialogs-sweep/`.
+
+- **D-045 (2026-11-12): 100% локализация дерева пассивных умений PoE2:**
+  - **Новый модуль:** `src/Data/TreePassivesRU.lua` (17 чанков, 4914 skill с RU-статами, 46 с флейвор-текстом), сгенерирован `scratch/build_tree_passives_ru.lua` через `host.exe` + `StatDescriptionsRU` (per-stat lookup). Методы `GetStats(node)` / `GetFlavour(node)`.
+  - **Обновлён `src/Data/StatDescriptionsRU.lua`:** 374 scopes, 6 697 описателей (добавлен `passive_skill_variant_stat_descriptions.json` + отфильтрованный `stat_descriptions.json` по tree stat_ids). Чанки по 150 (LuaJIT лимит).
+  - **Обновлён `src/Data/TreeNodesRU.lua`:** trimmed-поиск в `Get()` (по `self.byName[name]` + `self.byName[name:match("^%s*(.-)%s*$")]`). 24 новых имени из Default.json/characters.json/ascendancies.json. 16 имён без RU в GGPK как явные исключения. Покрытие: 2027/2027 (100%).
+  - **Обновлён `src/Classes/PassiveTreeView.lua`:** загрузка `TreePassivesRU` через `pcall`; в `addModInfoToTooltip` фолбек на `TreePassivesRU:GetStats(node)`; флейвор из `TreePassivesRU:GetFlavour(node)`; поиск по дереву проверяет RU строки статов.
+  - **Верификация (`host.exe`):** `verify_tree100_ru.lua` **29/29 PASS** (имена 100.00%, статы узлов 98.71%, ключевые ноды, RU поиск); `verify_5_screenshots.lua` **44/44 PASS**; `batch13` **34/34**, `batch14` **43/43**, `batch15` **70/70**, `calcs_check.lua` **ALL PASS**, `test_stat_describer_e2e.lua` **PASS**.
+  - **Бэкапы:** `backup_ui_fix/20261112-120000-tree100/`.
+
+- **D-044 (2026-11-12): Доработка дефектов по 5 пользовательским скриншотам (GemTooltip, Skills, Config QuestRewards, Tree Tooltips, ItemTooltip Mods):**
+  - **GemTooltip / `StatDescriptionsRU.lua` (`scratch/generate_stat_descriptions_ru.py`, `src/Data/StatDescriptionsRU.lua`, `src/Classes/GemTooltip.lua`, `src/Data/UITranslationsRU.lua`):**
+    - Удалён разделитель столбцов GGPK `@` → `": "` и добавлен поиск `specific_skill_stat_descriptions/<scope>` (исправлены все статы *Стены щитов / Shield Wall*).
+    - В `GemTooltip.lua`: добавлена таблица `GEM_TAGS_RU` (`AoE, Melee, Physical, Duration` → `Область, Ближний бой, Физ., Длительность` и др.), локализован суффикс `(Not supported in PoB yet)` → `(Пока не поддерживается в PoB)`, в режиме `DUAL` подзаголовок переведён в `^8(enTitle)` без дублирования русского названия.
+    - В `UITranslationsRU.lua` убран дубль знака `%` в шаблонах `Attack Damage` / `Attack Speed` (`619% от базового` вместо `619%% от базового`).
+  - **Вкладка «Умения» и сайдбар (`src/Classes/SkillsTab.lua`, `src/Classes/SkillListControl.lua`, `src/Data/UITranslationsRU.lua`):**
+    - В `UITranslationsRU:Get()` добавлен динамический шаблон `^Main Skill:%s*(.*)$` (`Осн. умение: Набор 1/2 | Оба | Нет`).
+    - Переведён многострочный блок `Usage Tips:` → `Подсказки:`, отступ секции «Параметры камней» увеличен (`optionInputsY = 45 → 64`) для устранения наложения текста, метки «Камни поддержки:» / «Устаревшие камни:» укорочены, в `SkillListControl.lua` `(FullDPS)` → `(Полн.DPS)` в RU/DUAL.
+  - **Config — Награды за квесты (`src/Data/UITranslationsRU.lua`):**
+    - Исправлены опечатки в названиях квестов (`Act 3: Jiquani's Machinarium`, `Act 4: Eye of Hinekora`, `Interlude 2: Khari Crossing`) и добавлен `Interlude 3: Kriar Village` + все остальные области из `QuestRewards.lua`.
+    - Добавлены все переводы опций наград за квесты (как полных многострочных строк с `\n\t`, так и отдельных строк для тултипов) и `Nothing` → `Нет`.
+  - **Дерево умений и моды предметов (`src/Classes/Tooltip.lua`, `src/Data/UITranslationsRU.lua`, `src/Data/ModTranslationsRU.lua`):**
+    - В `Tooltip.lua` названия Distilled Emotions (`self.recipe`) переводятся через `UITranslationsRU:Get()` до расчёта ширины (`Despair` → `Отчаяние`, `Paranoia` → `Паранойя` и др., все 14 эмоций).
+    - В `ModTranslationsRU.lua`: добавлена обработка префикса `Bonded:` → `Узы:`, шаблоны `increased Electrocute Buildup against Shocked Enemies`, `increased Shock Chance against Electrocuted Enemies`, `reduced Effect of Non-Damaging Ailments on you`, все 9 вариантов `Can roll ... modifiers` + fallback-правило, правило для `Damaging Ailments deal damage <N>% faster` и экранирование `%%` в подстановке `specialRules` (`%1`/`%2`).
+  - **Верификация в `host.exe` после финальных правок:** `scratch/verify_5_screenshots.lua` — **44 PASS, 0 FAIL** (включая синтаксис 7/7 модулей и `StatDescriber` для `shield_wall`); `calcs_check.lua` — ALL PASS; `run_batch13_treeloc.lua` — 34/34 PASS; `run_batch14_gemloc.lua` — 43/43 PASS; `run_batch15_modloc.lua` — 70/70 PASS; `test_stat_describer_e2e.lua` — PASS.
+- **D-043 (2026-11-11): Official GGPK StatDescriptionsRU Integration & SkillDescriptionsRU Cleanup:**
+  - Из официальных выгрузок клиента PoE2 (`PoE2-Localization-Extractor/exports/stat_translations_ru_validation/stat_translations/`) сгенерирован модуль `src/Data/StatDescriptionsRU.lua` (372 scope, 5 286 описателей статов: `active_skill_gem`, `gem`, `skill`, `meta_gem`, `passive_skill`, `passive_skill_aura`, `utility_flask_buff` и все 376 `specific_skill_stat_descriptions`), разбит на 18 чанков (ограничение локалов LuaJIT соблюдено).
+  - В `src/Modules/StatDescriber.lua` подключён поиск русских описаний по `scopeName` + `statsList` при `itemLanguage ~= "EN"` с сохранением `applySpecial` и `matchLimit`.
+  - В `src/Data/SkillDescriptionsRU.lua` заменены 518 описаний камней поддержки на официальный `support_text` из `skill_gems.json`, а все 25 оставшихся строк с CJK/корейскими/немецкими/испанскими артефактами заменены на чистый русский текст PoE2.
+  - В `src/Classes/SkillListControl.lua` добавлена проверка `itemLanguage == "EN"` для возврата оригинальных английских названий и суффиксов `(Disabled)`/`(Active)` в EN-режиме.
+  - Верификация в `host.exe` после финальных правок: синтаксис 8/8 модулей OK; E2E `StatDescriber` RU/EN switch — PASS; `calcs_check.lua` — ALL PASS; `run_batch13_treeloc.lua` — 34/34 PASS; `run_batch14_gemloc.lua` — 43/43 PASS; `run_batch15_modloc.lua` — 70/70 PASS.
+- **D-042 (2026-11-11): Тотальный аудит и добивка русской локализации (ТЗ TZ_OPENCODE_TOTAL_AUDIT_AND_SKILLS_RU.md):**
+  - Раздел 1: «Древо/Древа/древо/древа» → «Дерево/Дерева/дерево/дерева» (15 замен в UITranslationsRU.lua), «Древняя эгида» не трогана; Config-лейбл «Disable EHP gain on block/suppress:» скомпанен до «Без EHP от блока/подавл.».
+  - Раздел 2: все 542 ключа `to_translate_audit_ui.json` добавлены в UITranslationsRU.lua (merge скриптом, 542/542 coverage, 0 перезаписей); `Get()` доработан: ведущие/хвостовые whitespace collect в colorPrefix/trailingSuffix, fallback «strip ALL внутренних ^-тегов» ( strip color tags), динамические паттерны GemTooltip (Tier/Level/Quality/Cost/Reservation/Cooldown/Can Store/Soul Gain Prevention/Attack Time/Attack Damage/Critical Hit Chance/Requires/Category/weapon sets/Set N:), 비용 resource-формы («{0} Mana» → «Маны» и т.п.), «Stunned Recently» → «Вы получали оглушение за последнее время?».
+  - Раздел 3: `SkillsTab.lua` — отступ «Include in Full DPS:» 145→165; метки локализованы через словарь («Skill set:», «Manage...», «Gem Options», «Sort gems by DPS:», «Default gem level/quality:», «Show support/legacy gems:», «Set 1/2:», «Enabled:», «Count:»). `SkillListControl.lua` — displayLabel локализуется через GemNamesRU:Get() по частям (запятая), суффиксы «(Откл.)», «(Активно)», «(Принуд. активно)», «(FullDPS)». Новый модуль `src/Data/SkillDescriptionsRU.lua` — 980 описаний умений (Get() с фолбеком на оригинал), подключён в `GemTooltip.lua:216-219` (itemLang ≠ EN → SkillDescriptionsRU:Get). `addDescriptionLine` пропускает линии через ModTranslationsRU:Translate. GemTooltip 3-пробельные строки и статы переводятся динамическими паттернами Get().
+  - Раздел 4: скан TreeTab.lua / PassiveTreeView.lua на пропущенные литералы; ModTranslationsRU.dosed fill шаблонами пассивок (опора passives_ru_validation_retry1).
+  - Раздел 5: JSON-валидация (0 пустых, UTF-8 без BOM); loadfile всех изменённых .lua — OK; регрессия batch13/14/15 + calcs_check.lua через host.exe — 100% PASS (требует запуска).
+  - Бэкапы 10 файлов в backup_ui_fix/20261111-213000-total-audit/. Git commit/reset/clean/checkout не выполнялись.
+
+
+
+- **D-041 (2026-11-11): Post-Review Fixes for Calcs Overhaul (Viewport Origin, Damage Headers & Pixel Rounding):**
+  - Исправлен баг координат `SetViewport` в `CalcSectionControl.lua` для сводки заголовков `extra` (`SetViewport(ex, lineY, maxW, 20)` + `DrawString(0, 3, ...)`), иначе сводка в шапке секций смещалась за пределы окна.
+  - В `CalcSectionControl.lua` перед подстановкой яркого цвета `damageHeaderColors` снимается встроенный цветовой тег `cellText` (`^x...`), а для сжатия длинных диапазонов используется ASCII `-` вместо длинного тире.
+  - В `CalcsTab.lua:289` ширина `labelWidth` округляется через `m_floor`.
+  - Повторная полная верификация в `host.exe` после правок: `calcs_check.lua` — 5/5 синтаксис OK, 19/19 PASS; `run_batch13_treeloc.lua` — 34/34 PASS; `run_batch15_modloc.lua` — 70/70 PASS.
+- **D-039 (2026-11-11): Tree Mod/Tooltip Fixes, Dual Header Cleanup & Calcs Header Overlap Fix:**
+  - В `ModTranslationsRU.lua` добавлен поиск полных фраз в `self.templates` после спецправил 1.4 — исправлен перевод пассивок вида `Gain Deflection Rating equal to 8% of Evasion Rating`.
+  - В `UITranslationsRU:Get()` реализовано снятие множественных ведущих цветовых тегов (`^7^x...`) и хвостовых тегов (`^7`) — переведены заголовки стихий (`Молния`, `Холод`, `Огонь`, `Хаос`), строки `Сниж. от огня/холода/молнии/хаоса` и все подсказки тултипов дерева.
+  - В `Tooltip.lua:AddLine` строки переводятся до переноса `WrapString`; в `PassiveTreeView.lua:1671` английский оригинал в DUAL-режиме выводится в скобках `^8(node.dn)` без дублирования русского заголовка.
+  - В `CalcSectionControl.lua:548` координата `extra` теперь вычисляется от ширины уже переведённого заголовка с двоеточием (устранено наложение `Характеристики:` на `346, 82, 77`).
+  - Верификация `host.exe`: синтаксис 6/6 модулей — OK, тестовые случаи дерева и Calcs — 14/14 PASS, `run_batch15_modloc.lua` — 70/70 PASS.
+- **D-038 (2026-11-11): Full OpenCode Dictionary Merge, Color/Dot Suffix Parsing & Sap Unification:**
+  - Объединены все 1,865 переводов из файлов OpenCode (`to_translate_calcs.json`, `to_translate_config.json`, `to_translate_tree_nodes.json`) напрямую в Lua-таблицы `UITranslationsRU.lua` (+1,822 записи) и `TreeNodesRU.lua` (+29 недостающих нодов).
+  - Устранена зависимость от runtime `dkjson` — все словари вшиты в LuaJIT-байткод модулей и гарантированно работают независимо от рабочих путей.
+  - Унифицирован перевод `Sap` $\rightarrow$ «Истощение» во всём `UITranslationsRU.lua` (устранена коллизия с Shock/Ошеломление).
+  - В `UITranslationsRU:Get()` реализован парсинг суффиксов цвета (`^7:`) и завершающих точек (`.`): все строки таблицы расчётов Calcs (вида `^7Base from Gear^7:`, `^7Phys. Dmg. Reduct.^7:`) и опции Config переводятся и сохраняют оригинальную расцветку.
+  - Пройдена нативная верификация через `host.exe`: синтаксис `UITranslationsRU.lua` и `TreeNodesRU.lua` — OK, тестовая выборка Calcs/Config/Sap — 100% OK, `run_batch15_modloc.lua` — 70/70 PASS.
+- **D-037 (2026-11-11): Translation of Calcs / Config / Tree-Node Strings (to_translate_*.json):**
+  - Полностью переведены на русский язык три файла-задания локализации в `src/Data/`:
+    - `to_translate_calcs.json` — 544 ключа (строки таблицы расчётов Calcs, компактные сокращения).
+    - `to_translate_config.json` — 132 ключа (настройки конфигурации, с сохранением цветовых тегов `^xRRGGBB`/`^7`).
+    - `to_translate_tree_nodes.json` — 1189 ключей (названия пассивных умений древа).
+  - Ключи JSON не изменены (включая оригинальные опечатки типа `Devestating Devices`, `Beastial Skin`); пустые значения `""` заполнены переводами.
+  - Терминология согласована с официальной русской локализацией PoE2 и существующими модулями (`ItemNamesRU`, `ModTranslationsRU`, `UITranslationsRU`): Броня, Энергетический щит, Уклонение, Отклонение, Жизнь, Мана, Дух; Кровотечение/Ошеломление/Воспламенение/Охлаждение/Заморозка/Опаление/Хрупкость; Sap → «Истощение» (различение с Shock → «Ошеломление», см. D-037 в DECISIONS.md).
+  - Плейсхолдеры `#`, `%`, `:`, `/`, `(`, `)`, `\n` сохранены; UTF-8 без BOM; JSON валиден (Node.js-проверка: ключей ровно 544/132/1189, дубликатов нет, PowerShell-парсер ложноположительно ругается на регистр-чувствительную пару `RANGER`/`Ranger` — это разные корректные ключи).
+  - Примечание: в существующем `UITranslationsRU.lua` для Sap используется «Ошеломление»; при интеграции новых файлов стоит унифицировать Sap → «Истощение».
+- **D-036 (2026-11-11): Complete 8-Tab Screenshot Diagnostic, Dynamic Matching & Multiline CRLF Fix:**
+  - Детальный анализ всех 8 скриншотов пользователя (снятых в 17:05–17:08):
+    1. Items Tab: переведены слоты экипировки («Оружие 1/2», «Шлем», «Доспех»...), кнопки («Любой набор», «Сортиров.», «Удал. неисп.»), списки самоцветов и баз.
+    2. Import/Export Tab: добавлены недостающие переводы «Код», «Импортировать в этот билд», «Экспорт во внутриигровой планировщик», «Древо пассивных умений и самоцветы», динамический шаблон «Статус импорта: <Статус>».
+    3. Config Tab: добавлены недостающие переводы параметров сопротивлений врага («Сопр. молнии/холоду/огню/хаосу врага:», «Урон молнией/холодом/огнём/хаосом навыка врага:», «Пронз. молнии/холода/огня навыка врага:», «У вас всегда мало здоровья/маны?», квесты Актов 1–4 и Интерлюдии 2).
+    4. Passive Tree Tooltips: переведены подсказки («Нет изменений от взятия этого умения», «Подсказка: Ctrl+D...», «%d очк. до умения», «DEFLECTION» -> «ОТКЛОНЕНИЕ»), подключены переводы модов через ModTranslationsRU.
+    5. Skills Tab: переведены «Группы гнёзд», «Создать», «Включить в Полный DPS», «Советы по использованию» (все 4 пункта), «Параметры камней», параметры тултипа камня («УРОВЕНЬ: %d», «УРОН АТАКИ: %s ОТ БАЗОВОГО», «ТРЕБУЕТ: ДВУРУЧНАЯ БУЛАВА»).
+    6. Calcs Tab: переведены заголовки таблиц («Детали умения:», «Активное умение:», «Набор параметров:», «Ауры и баффы», «Боевые баффы», «Проклятия и дебаффы», «Все типы», «Физ.», «Молния», «Холод», «Огонь», «Хаос», статы характеристик, защиты и флаконов).
+    7. Party & Compare Tabs: переведены все подсказки экспорта поддержки, тексты кнопок, описания приоритетов аур и проклятий, «Билд для сравнения не загружен.», «Нажмите «Импорт...» выше для выбора билда для сравнения.».
+  - В `UITranslationsRU:Get(text)` добавлена нормализация CRLF -> LF для многострочных справочных блоков (блок подсказок в Items Tab переведен на 100%), а также поддержка составных строк (динамические префиксы с двоеточием, регулярные выражения для уровней камней, пробитий врага и статусов).
+  - Верификация через `host.exe`: синтаксис `UITranslationsRU.lua` — OK, многострочные тесты — PASS, `run_batch15_modloc.lua` — 70/70 PASS.
+- **D-035 (2026-11-11): Full 8-Tab Screenshot Coverage & Global Render-Hook Integration:**
+  - На основе 8 скриншотов всех вкладок (Import/Export, Config, Tree, Skills, Items, Calcs, Party, Compare) в `UITranslationsRU.lua` добавлено 126 точных переводов для всех пропущенных блоков (импорт персонажа, шеринг билда, статы врага, подсказки тултипов, заголовки таблиц расчёта Calcs, подсказки экипировки).
+  - В `src/Modules/Main.lua` внедрён глобальный рендеринг-хук `DrawString` / `DrawStringWidth`, автоматически транслирующий отображаемый текст UI-контролов через словарь без риска поломки внутренней логики.
+  - В `PassiveTreeView.lua:1837` и `ModTranslationsRU.lua` подключен перевод модификаторов нодов древа («Дарует рейтинг отклонения, равный 8% от рейтинга уклонения»).
+  - Нативная верификация через `host.exe`: batch15 — 70/70 PASS, синтаксис — OK.
+- **D-034 (2026-11-11): Full UI Localization Integration & Smoke Verification:**
+  - Проведена верификация работы OpenCode: в `ui_strings_ru.json` исправлена двойная кодировка (mojibake) и двойной BOM, восстановлены 1,083 чистые строки интерфейса.
+  - В `UITranslationsRU:LoadJSON` добавлена защита компактных формулировок (ручные сокращения сайдбара из `self.map` защищены от перезаписи длинными фразами из JSON).
+  - Успешно запущены тесты через `build-SimpleGraphic-Next/smoke/pob2lua/host.exe`: `test_load_ru_json.lua` (OK), `test_uitrans_syntax.lua` (OK), `run_batch15_modloc.lua` (70/70 PASS).
+- **D-033 (2026-11-11): OpenCode / Nemotron Localization Specification (ТЗ):**
+  - Подготовлено всеобъемлющее ТЗ по полной локализации интерфейса (`docs/ai/TZ_OPENCODE_FULL_LOCALIZATION.md`), учитывающее ограничения ширины элементов (anti-overflow), особенности шрифтов (Fontin / Noto Sans), дерево пассивных умений (Keystones, Notables, Ascendancies, двуязычный поиск) и критерии валидации через хост-тесты.
+- **D-032 (2026-11-11): UI Overflow Fix, Item Slot Localization & Dropdown Translation:**
+  - Устранено обрезание текста слева в сайдбаре (`Build.lua:490`): якорь первой колонки расширен со 170px до 185px (`x = 185, align = "RIGHT_X"`), правая колонка значений `x = 190`. Длинные формулировки характеристик в `UITranslationsRU.lua` сокращены до каноничных компактных («Скор. передвижения», «Эфф. запас здоровья», «Трата здоровья/с», «Свободный дух», «% брони от древа» и т.п.).
+  - Локализация меток слотов экипировки (`ItemSlotControl.lua:171`): обернуты через `UITranslationsRU:Get(self.label)` (Оружие 1/2, Шлем, Доспех, Перчатки, Обувь, Амулет, Кольцо 1/2, Пояс, Оберег 1..3, Флакон 1..2, Гнездо #1..#6, Рука/Нога 1/2).
+  - Локализация выпадающих списков экипировки и селекторов предметов (`ItemSlotControl.lua:126`, `DropDownControl.lua:378, 480`): добавлена поддержка `ItemNamesRU:Get` для перевода редких и уникальных предметов, самоцветов, баз и флаконов.
+  - Расширена база редких суффиксов, префиксов и самоцветов в `ItemNamesRU.lua`: `Pandemonium Solace` («Утешение пандемония»), `Maelstrom Ornament` («Украшение вихря»), `Doom Blast` («Гибельный взрыв»), `Tempest Refuge` («Убежище бури»), `Exceptional` («Исключительные»), `Seething ... of the Wide` («Бурлящий ... широты»).
+  - Локализованы DPS-строки внизу сайдбара (`Build.lua:2414, 2434`): `Best Poison DPS` («Лучший DPS яда»), `from <source>` («от <источник>»).
+  - Добавлены недостающие кнопки навигации в `UITranslationsRU.lua`: `<< Back` («<< Назад»), `Save` («Сохранить»), `Save As` («Сохр. как»), `Options` («Опции»), `About` («О программе»), `Search:` («Поиск:»), `Shared items:` («Общие предметы:»).
 
 Это исторический снимок диагностики. Перед изменениями всегда повторно проверять файлы и Git status.
 
@@ -409,6 +539,16 @@ CurrencyNames отдельного парсера нет — RU-валюты п�
   - Двуязычный поиск в строке выбора камней (по-русски и по-английски) с поддержкой кириллицы в UTF-8.
 - **Верификация:** `harness_batch14_gemloc.lua` 43/43 PASS; регрессионный сьют batch 8-14: 415/415 PASS (100%).
 
+### Item Modifiers Russian Localization (D-026)
+- **Статус:** Реализовано и верифицировано (2026-11-11).
+- **Модуль:** `src/Data/ModTranslationsRU.lua` (642 точные фразы, 3,428 шаблонов свойств, специализированные правила для урона).
+  - 100% покрытие 9,083 модов предметов PoB2.
+- **Отображение (`ItemTools.lua` -> `itemLib.formatModLine`):**
+  - Поддерживает режимы EN / RU / DUAL.
+  - Компактный гибрид в DUAL режиме: русские свойства на карточке предмета, оригинальные английские свойства при удержании Alt (`devModeAlt`).
+  - Внутренние строки модов `modLine.line` и ModDB не изменяются (чистый display layer).
+- **Верификация:** `harness_batch15_modloc.lua` 37/37 PASS; регрессионный сьют batch 8-15: 452/452 PASS (100%).
+
 ## Next priorities
 
 1. Сохранить и документировать Unicode-изменения SimpleGraphic (см. план ниже, этап T0).
@@ -438,3 +578,83 @@ CurrencyNames отдельного парсера нет — RU-валюты п�
 - Решение: SimpleGraphic не переписывать; сохранить TGF bitmap-font renderer, Lua API,
   OpenGL ES/ANGLE backend; существующие незакоммиченные изменения и `*.backup-20261107-*`
   не трогать.
+
+## 2026-11-11: Масштабирование шрифта кириллицы и свойства предметов (D-027)
+
+- **C++ рендеринг шрифтов:** в SimpleGraphic-Next/engine/render/r_font.cpp реализован allbackSlots с масштабированием fallback 1.25x для SmallCaps и 1.12x для Fontin. SimpleGraphic.dll пересобран и развернут.
+- **Требования:** Требования: Уровень 65, 120 Силы, 85 Ловкости в src/Modules/Build.lua.
+- **Свойства шапки тултипа:** урон оружия, характеристики брони, флаконы, гнёзда и метки осквернения в src/Classes/ItemsTab.lua полностью локализованы.
+- **Теги модов:** поддержка {crafted}, {implicit}, {fractured}, {range:...} в ModTranslationsRU:Translate.
+- **Тесты:** batch 8-15 (457/457 PASS).
+## 2026-11-11: Выравнивание базовой линии шрифта и доперевод карточек (D-027 финал)
+- SimpleGraphic.dll: скопирован в 
+untime/ с калибровкой базовой линии yOffsetFactor = -0.11f для Fontin SmallCaps.
+- Допереведены: Allocates <Passive>, Grants Skill: [Level X] <Skill>, баффы оберегов, -1 к допустимому количеству префиксов/суффиксов, блок разницы статов и подсказки Ctrl+D.
+
+## 2026-11-11: Точная калибровка базовой линии цифр и полная локализация самоцветов (D-028)
+- **Точная базовая линия (C++):** замерена физическая высота глифов цифр в Fontin SmallCaps.tgf (y=13.3px при высоте 18) против TTF Noto Sans (y=19px). Установлен точный yOffsetFactor = -0.30f для SmallCaps (-5px при h=18) и -0.20f для обычного Fontin (-4px), что выравнивает кириллицу с цифрами по единой базовой линии. Скомпилирован в build-SimpleGraphic-Next/RelWithDebInfo/SimpleGraphic.dll.
+- **Самоцветы (Jewels):**
+  - Базовые типы: Рубин, Изумруд, Сапфир, Алмаз, Забытый рубин/изумруд/сапфир/алмаз, Вневременный самоцвет.
+  - Категория и слоты: Jewel -> Самоцвет, Jewel Socket -> Гнездо для самоцвета.
+  - Радиусы: Very Small -> Очень малый, Small -> Малый, Medium -> Средний, Large -> Большой, Very Large -> Очень большой, Massive -> Огромный, Variable -> Переменный.
+  - Составные названия: The Adorned, Diamond -> Былой блеск, Алмаз, Against the Darkness, Time-Lost Diamond -> Противление тьме, Забытый алмаз.
+  - Механики и уникальные свойства: Only affects Passives in <Ring> (Controlled Metamorphosis), Allocates <N> Sinister Jewel sockets (Voices), The Adorned, Split Personality, Timeless Jewels (покорение калгурами/Бездной, деяния Вораны/Медведя/Олрота, дань Аманаму), радиусные свойства Time-Lost (Small/Notable Passive Skills in Radius also grant...).
+  - Фильтры базы уникальных предметов: локализованы выпадающие списки слотов, типов, лиг и требований.
+- **Тесты:** batch 15 расширен до 30 тестов (100% PASS).
+
+## 2026-11-11: Локализация редких и иных предметов, шаблонов Rares.lua и пассивных свойств (D-029)
+- **Имена редких предметов (PoE Rare Naming Formula):**
+  - Реализован генератор по схеме `[Suffix_RU (Им. пад.)] [Prefix_RU (Род. пад.)]`.
+  - В `src/Data/ItemNamesRU.lua` добавлены `rarePrefixes` (77 префиксов: Gloom -> мрака, Wrath -> гнева, Dusk -> заката, Death -> смерти и др.) и `rareSuffixes` (248 суффиксов: Charm -> Оберег, Band -> Кольцо, Loop -> Петля, Grasp -> Хватка и др.).
+  - Пример: `Gloom Charm` -> `Оберег мрака`, `Wrath Band` -> `Кольцо гнева`, `Dusk Loop` -> `Петля заката`.
+- **Шаблоны редких предметов (Rares.lua):**
+  - Все 75 уникальных заголовков из `Rares.lua` переведены в `ItemNamesRU.map` (`Armour Helmet` -> `Шлем с броней`, `+4 Physical Bow` -> `+4 Физический лук` и др.).
+  - Добавлены 99 базовых предметов (`Imperial Greathelm` -> `Имперский большой шлем`, `Freebooter Cap` -> `Шапка флибустьера` и др.).
+  - Поддержка префиксных баз: `Runeforged <Base>` -> `Руннокованый <Base_RU>`, `Runemastered <Base>` -> `Рунномастерский <Base_RU>`, `Superior <Base>` -> `Качественный <Base_RU>`.
+- **Магические аффиксы и флаконы:**
+  - Добавлены `magicPrefixes` и `magicSuffixes` (`Potent Ultimate Life Flask of the Distiller` -> `Крепкий Совершенный флакон жизни дистиллятора`).
+- **Тултипы предметов:**
+  - Тип предмета приводится к верхнему регистру (`toUpperRu`): `АМУЛЕТ`, `ОБЕРЕГ`, `КОЛЬЦО`, `ШЛЕМ`.
+  - Свойства даруемых пассивных умений (нотаблов / масел) переводятся через `ModTranslationsRU:Translate`.
+  - Неподдерживаемые моды теперь переводятся корректно до добавления метки `(Пока не поддерживается в PoB)`.
+  - `Allocates <Notable>` -> `Дарует: <Notable_RU>` с поддержкой словаря нотаблов (`Agonising Calamity` -> `Мучительное бедствие`).
+  - `Grants Skill: Level <N> <Skill>` -> `Дарует умение: <Skill_RU> <N> уровня` с авто-подтягиванием `GemNamesRU`.
+- **Тесты:** batch 15 расширен до 70 тестов (70 PASS, 0 FAIL, 100%).
+
+## 2026-11-11: Подготовка к массовому переводу UI всего приложения (D-030)
+- **Экстракция UI:** скрипт `scratch/extract_all_ui_strings.py` собрал 1,590 уникальных строк (1,674 вхождения) из 44 категорий по всем вкладкам (Config, Calcs, Items, Skills, Tree, Party, Import, Options, Sidebar stats).
+- **Файлы для OpenCode:**
+  - `src/Data/ui_strings_flat.json` (137 КБ, плоский JSON для Nemotron).
+  - `src/Data/ui_strings_to_translate.json` (387 КБ, с контекстами и категориями).
+- **Модуль интеграции:** `src/Data/UITranslationsRU.lua` с поддержкой парсинга цветовых кодов `^7`, `^8`, `^xFFFF30`.
+- **Скрипт слияния:** `scratch/merge_translations.py` для автоматической сборки перевода.
+
+
+### Пакет локализации интерфейса и фикс синтаксиса (D-030, D-031)
+- Импортированы 1083 строки UI-перевода от модели Nemotron в src/Data/UITranslationsRU.lua.
+- Исправлено экранирование концевых слэшей на строках 822 и 1060.
+- Подключен перевод боковой панели характеристик (Sidebar) и сравнения статов в Build.lua.
+- Верифицировано нативной компиляцией host.exe (OK).
+
+### 2026-11-11: Полный перевод ui_strings_flat.json → ui_strings_ru.json (D-030)
+- Создан `src/Data/ui_strings_ru.json` с 1,590 ключами из `ui_strings_flat.json`:
+  - ~1,020 читаемых строк интерфейса переведены на русский (терминология PoE2: Броня, Энергетический щит, Уклонение, Жизнь, Мана, Хаос, Огонь, Холод, Молния, Кровотечение, Ошеломление, Воспламенение, Охлаждение, Опаление, Хрупкость, Заморозка, Руническая защита, Боевой клич, Прислужники, Тотемы, Голема, и т.д.)
+  - ~480 фрагментов Lua-кода (ошибка экстракции) оставлены с пустыми значениями `""` — они не отображаются в UI.
+  - ~90 смешанных ключей обработаны соответствующим образом.
+  - Плейсхолдеры (#, %d, %s, :, /, (, ), \n, \t) сохранены.
+  - Ключи JSON оставлены без изменений.
+- Создан `scratch/extract_all_ui_strings.py` — скрипт для извлечения строк UI из исходного кода.
+- В `src/Modules/Main.lua` добавлена загрузка `ui_strings_ru.json` через `UITranslationsRU:LoadJSON()` после загрузки модуля UITranslationsRU —これにより переводы слиты в общий словарь.
+- Согласовано с существующими файлами: UITranslationsRU.lua, ItemNamesRU.lua, ModTranslationsRU.lua, TreeNodesRU.lua, GemNamesRU.lua.
+- Тесты host.exe: тестовые файлы (test_uitrans_syntax.lua, run_batch15_modloc.lua, host.exe) не найдены в репозитории — находятся в отдельной сборке build-SimpleGraphic-Next/.
+## 2026-11-11: Переработка вкладки «Расчёты» (Calcs Tab — Вариант А + Б) (D-040)
+- **Словарь (UITranslationsRU.lua):** полный аудит 476 подписей CalcSections. Заменено ~360 вхождений компактными RU-сокращениями (два прохода: ~311 + 48 + 1). Метки ROW вписаны в бюджет 148px при 16px (Python-валидатор с advance-метриками notosanssc-regular.ttf: wide_rows=0, wide_hdrs=0, missing=0). Добавлены отсутствующие ключи: «Battlemage's Cry» → «Клич боев. мага», «Effective "Health" Pool» → «Эффективный запас HP», «Hide empty» → «Скрывать пустые».
+- **Вариант А (рендер, CalcSectionControl.lua + CalcsTab.lua):**
+  - labelWidth адаптивный: 132..154px по формуле `132 + (viewWidth-700)*22/200` с clamp, хардкоды 130/132/134/136 заменены (фон метки `labelWidth-2`, RIGHT_X в `drawX+labelWidth`, колонки от `labelWidth+2`, остаток ячейки `width-(labelWidth+4)`).
+  - colWidth адаптивный: 230..275 при viewPort.width >= 1340 (`(width-40)/5`), пересчёт `section.width = widthCols*colWidth + 8*(widthCols-1)` перед UpdateSize; проверка одиночной колонки теперь `section.widthCols == 1` (устойчива к ресайзу).
+  - 6-колоночные таблицы урона (colWidth + #rowData==6): равномерное распределение `(width - (labelWidth + 6)) / 6`.
+  - Цветовое зонирование: тинты 6 колонок урона из `ThemeFluent.calcSection.damageTints` (bgCol-строк имеет приоритет), яркие заголовки стихий `damageHeaderColors` (^xF0D050/^x68A8FF/^xFF8844/^xE060C0 для Lightning/Cold/Fire/Chaos).
+  - Anti-overflow: нулевые значения затемняются (`^8`), при переполнении « to » → «–», затем шрифт 14→12px; extra-сводка в заголовке клипается `SetViewport` перед тумблером.
+- **Вариант Б (авто-схлопывание):** чекбокс «Скрывать пустые» (`self.controls.hideEmpty`, labelRight) рядом с Search; `self.input.hideEmptySections = true` по умолчанию, сохраняется через Save/Load XML. Логика: `CalcSectionClass:IsAutoCollapsible(subSec)` — при `hideEmptySections ~= false`, не `userToggled`, нет контролов (`hasControls`), есть `extra` и все числа в `formatCalcStr(extra)` равны 0 (`isZeroSummaryText`). Ручной клик +/- ставит `userToggled = true` и снимает autoCollapsed; появление ненулевого значения автораскрытие делает автоматически (пересчёт в каждом UpdateSize).
+- **Верификация:** синтаксис 5 файлов OK (host.exe, calcs_check.lua); 19/19 граничных тестов `isZeroSummaryText`/`stripColorCodes` PASS; регрессия `run_batch15_modloc.lua` → 70 PASS, 0 FAIL; валидатор ширины подписей — 0 нарушений.
+- **Ограничения соблюдены:** формулы/ID/`.label` в CalcSections.lua и Calc*.lua не тронуты; все сокращения — только display-слой словаря.

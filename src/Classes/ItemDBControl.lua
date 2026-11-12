@@ -37,35 +37,78 @@ function ItemDBClass:ItemDBControl(anchor, rect, itemsTab, db, dbType)
 	self.sortMode = "NAME"
 	self.leaguesAndTypesLoaded = false
 	self.leagueList = { "Any league", "No league" }
+	local dbRuMap = {
+		["Any slot"] = "Любой слот",
+		["Weapon 1"] = "Оружие 1",
+		["Weapon 2"] = "Оружие 2",
+		["Helmet"] = "Шлем",
+		["Body Armour"] = "Доспех",
+		["Gloves"] = "Перчатки",
+		["Boots"] = "Обувь",
+		["Amulet"] = "Амулет",
+		["Ring"] = "Кольцо",
+		["Belt"] = "Пояс",
+		["Jewel"] = "Самоцвет",
+		["Charm"] = "Оберег",
+		["Any type"] = "Любой тип",
+		["Armour"] = "Доспехи",
+		["Jewellery"] = "Украшения",
+		["One Handed Melee"] = "Одноручное ближний бой",
+		["Two Handed Melee"] = "Двуручное ближний бой",
+		["Sort by Name"] = "По названию",
+		["Sort by DPS"] = "По урону в сек.",
+		["Any league"] = "Любая лига",
+		["Any requirements"] = "Любые требования",
+		["Current level"] = "Текущий уровень",
+		["Current attributes"] = "Текущие характеристики",
+		["Current useable"] = "Можно использовать",
+		["Any source"] = "Любой источник",
+		["Obtainable"] = "Доступные",
+		["Unobtainable"] = "Недоступные",
+		["Vendor Recipe"] = "Рецепт торговца",
+		["Upgraded"] = "Улучшенные",
+		["Boss Item"] = "Предмет с босса",
+		["Corruption"] = "Осквернение",
+		["Anywhere"] = "Везде",
+		["Names"] = "Названия",
+		["Modifiers"] = "Свойства",
+	}
+	local function dbLabelMapper(val)
+		if (main and main.itemLanguage) == "EN" then
+			return val
+		end
+		return dbRuMap[val] or val
+	end
+
 	self.typeList = { "Any type", "Armour", "Jewellery", "One Handed Melee", "Two Handed Melee" }
 	self.slotList = { "Any slot", "Weapon 1", "Weapon 2", "Helmet", "Body Armour", "Gloves", "Boots", "Amulet", "Ring", "Belt", "Jewel" }
 	local baseY = dbType == "RARE" and -22 or -62
 	self.controls.slot = new("DropDownControl"):DropDownControl({ "BOTTOMLEFT", self, "TOPLEFT" }, { 0, baseY, 179, 18 }, self.slotList, function(index, value)
 		self.listBuildFlag = true
-	end)
+	end, nil, nil, dbLabelMapper)
 	self.controls.type = new("DropDownControl"):DropDownControl({ "LEFT", self.controls.slot, "RIGHT" }, { 2, 0, 179, 18 }, self.typeList, function(index, value)
 		self.listBuildFlag = true
-	end)
+	end, nil, nil, dbLabelMapper)
 	if dbType == "UNIQUE" then
 		self.controls.sort = new("DropDownControl"):DropDownControl({ "BOTTOMLEFT", self, "TOPLEFT" }, { 0, baseY + 20, 179, 18 }, self.sortDropList, function(index, value)
 			self:SetSortMode(value.sortMode)
-		end)
+		end, nil, nil, dbLabelMapper)
 		self.controls.league = new("DropDownControl"):DropDownControl({ "LEFT", self.controls.sort, "RIGHT" }, { 2, 0, 179, 18 }, self.leagueList, function(index, value)
 			self.listBuildFlag = true
-		end)
+		end, nil, nil, dbLabelMapper)
 		self.controls.requirement = new("DropDownControl"):DropDownControl({ "LEFT", self.controls.sort, "BOTTOMLEFT" }, { 0, 11, 179, 18 }, { "Any requirements", "Current level", "Current attributes", "Current useable" }, function(index, value)
 			self.listBuildFlag = true
-		end)
+		end, nil, nil, dbLabelMapper)
 		self.controls.obtainable = new("DropDownControl"):DropDownControl({ "LEFT", self.controls.requirement, "RIGHT" }, { 2, 0, 179, 18 }, { "Obtainable", "Any source", "Unobtainable", "Vendor Recipe", "Upgraded", "Boss Item", "Corruption" }, function(index, value)
 			self.listBuildFlag = true
-		end)
+		end, nil, nil, dbLabelMapper)
 	end
 	self.controls.search = new("EditControl"):EditControl({ "BOTTOMLEFT", self, "TOPLEFT" }, { 0, -2, 258, 18 }, "", "Search", "%c", 100, function()
 		self.listBuildFlag = true
 	end, nil, nil, true)
 	self.controls.searchMode = new("DropDownControl"):DropDownControl({ "LEFT", self.controls.search, "RIGHT" }, { 2, 0, 100, 18 }, { "Anywhere", "Names", "Modifiers" }, function(index, value)
 		self.listBuildFlag = true
-	end)
+	end, nil, nil, dbLabelMapper)
 	self:BuildSortOrder()
 	self.listBuildFlag = true
 	return self
@@ -326,7 +369,10 @@ end
 
 function ItemDBClass:GetRowValue(column, index, item)
 	if item and column == 1 then
-		return colorCodes[item.rarity] .. item.name
+		local isRu = (main and main.itemLanguage) ~= "EN"
+		local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+		local name = isRu and (ItemNamesRU and ItemNamesRU:Get(item.name) or item.name) or item.name
+		return colorCodes[item.rarity] .. name
 	end
 end
 

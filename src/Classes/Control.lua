@@ -66,11 +66,16 @@ function ControlClass:Control(anchor, rect)
 end
 
 function ControlClass:GetProperty(name)
+	local val
 	if type(self[name]) == "function" then
-		return self[name](self)
+		val = self[name](self)
 	else
-		return self[name]
+		val = self[name]
 	end
+	if name == "label" and type(val) == "string" and UITranslationsRU then
+		return UITranslationsRU:Get(val)
+	end
+	return val
 end
 
 function ControlClass:SetAnchor(point, other, otherPoint, x, y, collapse)

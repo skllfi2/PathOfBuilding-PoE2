@@ -379,20 +379,29 @@ function ItemsTabClass:ItemsTab(build)
 	end
 
 	-- Database selector
-	self.controls.selectDBLabel = new("LabelControl"):LabelControl({ "TOPLEFT", self.controls.itemList, "BOTTOMLEFT" }, { 0, 14, 0, 16 }, "^7Import from:")
+	self.controls.selectDBLabel = new("LabelControl"):LabelControl({ "TOPLEFT", self.controls.itemList, "BOTTOMLEFT" }, { 0, 14, 0, 16 }, function()
+		local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+		return isUiRu and "^7Импорт из:" or "^7Import from:"
+	end)
 	self.controls.selectDBLabel.shown = function()
 		return self.height < 980
 	end
 	self.selectedDB = "UNIQUE"
 
 	-- Uniques Button
-	self.controls.uniqueButton = new("ButtonControl"):ButtonControl({ "LEFT", self.controls.selectDBLabel, "RIGHT" }, { 4, 0, 110, 18 }, "Uniques", function()
+	self.controls.uniqueButton = new("ButtonControl"):ButtonControl({ "LEFT", self.controls.selectDBLabel, "RIGHT" }, { 4, 0, 110, 18 }, function()
+		local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+		return isUiRu and "Уникальные" or "Uniques"
+	end, function()
 	    self.selectedDB = "UNIQUE"
 	end)
 	self.controls.uniqueButton.locked = function() return self.selectedDB == "UNIQUE" end
 
 	-- Rare Templates Button
-	self.controls.rareButton = new("ButtonControl"):ButtonControl({ "LEFT", self.controls.selectDBLabel, "RIGHT" }, { 120, 0, 110, 18 }, "Rare Templates", function()
+	self.controls.rareButton = new("ButtonControl"):ButtonControl({ "LEFT", self.controls.selectDBLabel, "RIGHT" }, { 120, 0, 110, 18 }, function()
+		local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+		return isUiRu and "Редкие шаблоны" or "Rare Templates"
+	end, function()
 	    self.selectedDB = "RARE"
 	end)
 	self.controls.rareButton.locked = function() return self.selectedDB == "RARE" end
@@ -3958,53 +3967,71 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 			item.mutated = true
 		end
 	end
+	if itemLang ~= "EN" and ItemNamesRU and ItemNamesRU:Get(typeStr) then
+		typeStr = toUpperRu(ItemNamesRU:Get(typeStr))
+	end
 	self:SetTooltipHeaderInfluence(tooltip, item)
 	tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s", typeStr), "FONTIN SC")
 	if item.quality and item.quality > 0 then
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FQuality: "..colorCodes.MAGIC.."+%d%%", item.quality), "FONTIN SC")
+		local qLabel = (itemLang ~= "EN") and "Качество: " or "Quality: "
+		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..colorCodes.MAGIC.."+%d%%", qLabel, item.quality), "FONTIN SC")
 	end
 
 	if item.charmLimit then
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FCharm Slots: "..main:StatColor(item.charmLimit, base.charmLimit).."%d", item.charmLimit), "FONTIN SC")
+		local charmLabel = (itemLang ~= "EN") and "Ячейки талисманов: " or "Charm Slots: "
+		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..main:StatColor(item.charmLimit, base.charmLimit).."%d", charmLabel, item.charmLimit), "FONTIN SC")
 	end
 	if item.spiritValue then
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FSpirit: "..main:StatColor(item.spiritValue, base.spirit).."%d", item.spiritValue), "FONTIN SC")
+		local spiritLabel = (itemLang ~= "EN") and "Дух: " or "Spirit: "
+		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..main:StatColor(item.spiritValue, base.spirit).."%d", spiritLabel, item.spiritValue), "FONTIN SC")
 	end
 
 	if base.weapon then
 		-- Weapon-specific info
 		local weaponData = item.weaponData[slotNum]
 		local totalDamageTypes = 0
+		local isRu = (itemLang ~= "EN")
 		if weaponData.PhysicalDPS then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FPhysical Damage: "..colorCodes.MAGIC.."%d-%d (%.1f DPS)", weaponData.PhysicalMin, weaponData.PhysicalMax, weaponData.PhysicalDPS), "FONTIN SC")
+			local physLabel = isRu and "Физический урон: " or "Physical Damage: "
+			local dpsSuffix = isRu and " DPS)" or " DPS)"
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..colorCodes.MAGIC.."%d-%d (%.1f"..dpsSuffix, physLabel, weaponData.PhysicalMin, weaponData.PhysicalMax, weaponData.PhysicalDPS), "FONTIN SC")
 			totalDamageTypes = totalDamageTypes + 1
 		end
 		if weaponData.ElementalDPS then
 			local elemLine
+			local elemPrefix = isRu and "^x7F7F7FУрон от стихий: " or "^x7F7F7FElemental Damage: "
 			for _, var in ipairs({"Fire","Cold","Lightning"}) do
 				if weaponData[var.."DPS"] then
-					elemLine = elemLine and elemLine.."^x7F7F7F, " or "^x7F7F7FElemental Damage: "
+					elemLine = elemLine and elemLine.."^x7F7F7F, " or elemPrefix
 					elemLine = elemLine..s_format("%s%d-%d", colorCodes[var:upper()], weaponData[var.."Min"], weaponData[var.."Max"], "FONTIN SC")
 				end
 			end
 			tooltip:AddLine(fontSizeBig, elemLine, "FONTIN SC")
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FElemental DPS: "..colorCodes.MAGIC.."%.1f", weaponData.ElementalDPS), "FONTIN SC")
+			local elemDpsLabel = isRu and "^x7F7F7FУрон от стихий в сек.: " or "^x7F7F7FElemental DPS: "
+			tooltip:AddLine(fontSizeBig, s_format("%s"..colorCodes.MAGIC.."%.1f", elemDpsLabel, weaponData.ElementalDPS), "FONTIN SC")
 			totalDamageTypes = totalDamageTypes + 1
 		end
 		if weaponData.ChaosDPS then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FChaos Damage: "..colorCodes.CHAOS.."%d-%d "..colorCodes.MAGIC.."(%.1f DPS)", weaponData.ChaosMin, weaponData.ChaosMax, weaponData.ChaosDPS), "FONTIN SC")
+			local chaosLabel = isRu and "Урон от хаоса: " or "Chaos Damage: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..colorCodes.CHAOS.."%d-%d "..colorCodes.MAGIC.."(%.1f DPS)", chaosLabel, weaponData.ChaosMin, weaponData.ChaosMax, weaponData.ChaosDPS), "FONTIN SC")
 			totalDamageTypes = totalDamageTypes + 1
 		end
 		if totalDamageTypes > 1 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FTotal DPS: "..colorCodes.MAGIC.."%.1f", weaponData.TotalDPS), "FONTIN SC")
+			local totalDpsLabel = isRu and "Общий урон в сек.: " or "Total DPS: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s"..colorCodes.MAGIC.."%.1f", totalDpsLabel, weaponData.TotalDPS), "FONTIN SC")
 		end
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FCritical Hit Chance: %s%.2f%%", main:StatColor(weaponData.CritChance, base.weapon.CritChanceBase), weaponData.CritChance), "FONTIN SC")
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FAttacks per Second: %s%.2f", main:StatColor(weaponData.AttackRate, base.weapon.AttackRateBase), weaponData.AttackRate), "FONTIN SC")
+		local critLabel = isRu and "Шанс критического удара: " or "Critical Hit Chance: "
+		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%.2f%%", critLabel, main:StatColor(weaponData.CritChance, base.weapon.CritChanceBase), weaponData.CritChance), "FONTIN SC")
+		local apsLabel = isRu and "Атак в секунду: " or "Attacks per Second: "
+		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%.2f", apsLabel, main:StatColor(weaponData.AttackRate, base.weapon.AttackRateBase), weaponData.AttackRate), "FONTIN SC")
 		if weaponData.ReloadTime then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FReload Time: %s%.2f", main:StatColor(weaponData.ReloadTime, base.weapon.ReloadTimeBase), weaponData.ReloadTime), "FONTIN SC")
+			local reloadLabel = isRu and "Время перезарядки: " or "Reload Time: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%.2f", reloadLabel, main:StatColor(weaponData.ReloadTime, base.weapon.ReloadTimeBase), weaponData.ReloadTime), "FONTIN SC")
 		end
 		if weaponData.range < 120 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FWeapon Range: %s%.1f ^x7F7F7Fmetres", main:StatColor(weaponData.range, base.weapon.Range), weaponData.range / 10), "FONTIN SC")
+			local rangeLabel = isRu and "Дальность оружия: " or "Weapon Range: "
+			local metresLabel = isRu and "метров" or "metres"
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%.1f ^x7F7F7F%s", rangeLabel, main:StatColor(weaponData.range, base.weapon.Range), weaponData.range / 10, metresLabel), "FONTIN SC")
 		end
 	elseif base.armour then
 		-- Armour-specific info
@@ -4014,99 +4041,158 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 		local evasion = item:GetArmourDataValue("Evasion", level)
 		local energyShield = item:GetArmourDataValue("EnergyShield", level)
 		local ward = item:GetArmourDataValue("Ward", level)
+		local isRu = (itemLang ~= "EN")
 		if base.armour.BlockChance and armourData.BlockChance > 0 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FChance to Block: %s%d%%", main:StatColor(armourData.BlockChance, base.armour.BlockChance), armourData.BlockChance), "FONTIN SC")
+			local blockLabel = isRu and "Шанс блока: " or "Chance to Block: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%d%%", blockLabel, main:StatColor(armourData.BlockChance, base.armour.BlockChance), armourData.BlockChance), "FONTIN SC")
 		end
 		if armour > 0 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FArmour: %s%d", main:StatColor(armour, armourData.ArmourBase), armour), "FONTIN SC")
+			local armLabel = isRu and "Броня: " or "Armour: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%d", armLabel, main:StatColor(armour, armourData.ArmourBase), armour), "FONTIN SC")
 		end
 		if evasion > 0 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FEvasion Rating: %s%d", main:StatColor(evasion, armourData.EvasionBase), evasion), "FONTIN SC")
+			local evaLabel = isRu and "Уклонение: " or "Evasion Rating: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%d", evaLabel, main:StatColor(evasion, armourData.EvasionBase), evasion), "FONTIN SC")
 		end
 		if energyShield > 0 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FEnergy Shield: %s%d", main:StatColor(energyShield, armourData.EnergyShieldBase), energyShield), "FONTIN SC")
+			local esLabel = isRu and "Энергетический щит: " or "Energy Shield: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%d", esLabel, main:StatColor(energyShield, armourData.EnergyShieldBase), energyShield), "FONTIN SC")
 		end
 		if ward > 0 then
-			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRunic Ward: %s%d", main:StatColor(ward, armourData.WardBase), ward), "FONTIN SC")
+			local wardLabel = isRu and "Рунический оберег: " or "Runic Ward: "
+			tooltip:AddLine(fontSizeBig, s_format("^x7F7F7F%s%s%d", wardLabel, main:StatColor(ward, armourData.WardBase), ward), "FONTIN SC")
 		end
 	elseif base.flask then
 		-- Flask-specific info
 		local flaskData = item.flaskData
+		local isRu = (itemLang ~= "EN")
 		if flaskData.lifeTotal then
 			if flaskData.lifeGradual ~= 0 then
-				tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FLife over %s%.1f0 ^x7F7F7FSeconds",
-					main:StatColor(flaskData.lifeTotal, base.flask.life), flaskData.lifeGradual,
-					main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
-					), "FONTIN SC")
+				if isRu then
+					tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FВосстанавливает %s%d ^x7F7F7Fздоровья за %s%.1f0 ^x7F7F7Fсекунды",
+						main:StatColor(flaskData.lifeTotal, base.flask.life), flaskData.lifeGradual,
+						main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
+						), "FONTIN SC")
+				else
+					tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FLife over %s%.1f0 ^x7F7F7FSeconds",
+						main:StatColor(flaskData.lifeTotal, base.flask.life), flaskData.lifeGradual,
+						main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
+						), "FONTIN SC")
+				end
 			end
 			if flaskData.lifeInstant ~= 0 then
-				tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FLife instantly", main:StatColor(flaskData.lifeTotal, base.flask.life), flaskData.lifeInstant), "FONTIN SC")
+				local lifeInstFmt = isRu and "^x7F7F7FМгновенно восстанавливает %s%d ^x7F7F7Fздоровья" or "^x7F7F7FRecovers %s%d ^x7F7F7FLife instantly"
+				tooltip:AddLine(fontSizeBig, s_format(lifeInstFmt, main:StatColor(flaskData.lifeTotal, base.flask.life), flaskData.lifeInstant), "FONTIN SC")
 			end
 		end
 		if flaskData.manaTotal then
 			if flaskData.manaGradual ~= 0 then
-				tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FMana over %s%.1f0 ^x7F7F7FSeconds",
-					main:StatColor(flaskData.manaTotal, base.flask.mana), flaskData.manaGradual,
-					main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
-					), "FONTIN SC")
+				if isRu then
+					tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FВосстанавливает %s%d ^x7F7F7Fманы за %s%.1f0 ^x7F7F7Fсекунды",
+						main:StatColor(flaskData.manaTotal, base.flask.mana), flaskData.manaGradual,
+						main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
+						), "FONTIN SC")
+				else
+					tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FMana over %s%.1f0 ^x7F7F7FSeconds",
+						main:StatColor(flaskData.manaTotal, base.flask.mana), flaskData.manaGradual,
+						main:StatColor(flaskData.duration, base.flask.duration), flaskData.duration
+						), "FONTIN SC")
+				end
 			end
 			if flaskData.manaInstant ~= 0 then
-				tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FRecovers %s%d ^x7F7F7FMana instantly", main:StatColor(flaskData.manaTotal, base.flask.mana), flaskData.manaInstant), "FONTIN SC")
+				local manaInstFmt = isRu and "^x7F7F7FМгновенно восстанавливает %s%d ^x7F7F7Fманы" or "^x7F7F7FRecovers %s%d ^x7F7F7FMana instantly"
+				tooltip:AddLine(fontSizeBig, s_format(manaInstFmt, main:StatColor(flaskData.manaTotal, base.flask.mana), flaskData.manaInstant), "FONTIN SC")
 			end
 		end
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FConsumes %s%d ^x7F7F7Fof %s%d ^x7F7F7FCharges on use",
+		local chargeFmt = isRu and "^x7F7F7FТратит %s%d ^x7F7F7Fиз %s%d ^x7F7F7Fзарядов при использовании" or "^x7F7F7FConsumes %s%d ^x7F7F7Fof %s%d ^x7F7F7FCharges on use"
+		tooltip:AddLine(fontSizeBig, s_format(chargeFmt,
 			main:StatColor(flaskData.chargesUsed, base.flask.chargesUsed), flaskData.chargesUsed,
 			main:StatColor(flaskData.chargesMax, base.flask.chargesMax), flaskData.chargesMax
 			), "FONTIN SC")
 		for _, modLine in pairs(item.buffModLines) do
+			local buffLine = modLine.line
+			if isRu and ModTranslationsRU then
+				local ru = ModTranslationsRU:Translate(buffLine)
+				if ru and ru ~= buffLine then
+					buffLine = ru
+				end
+			end
 			if modLine.extra then
-				local line = colorCodes.UNSUPPORTED..modLine.line
-				line = (main.notSupportedModTooltips and not isCompact) and (line .. main.notSupportedTooltipText) or line
+				local notSupp = isRu and " (Пока не поддерживается в PoB)" or main.notSupportedTooltipText
+				local line = colorCodes.UNSUPPORTED..buffLine
+				line = (main.notSupportedModTooltips and not isCompact) and (line .. notSupp) or line
 				tooltip:AddLine(fontSizeBig, line, "FONTIN SC")
 			else
-				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..modLine.line, "FONTIN SC")
+				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..buffLine, "FONTIN SC")
 			end
 		end
 	elseif base.charm then
 		-- Charm-specific info
 		local charmData = item.charmData
-
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FLasts %s%.2f ^x7F7F7FSeconds", main:StatColor(charmData.duration, base.charm.duration), charmData.duration), "FONTIN SC")
-		tooltip:AddLine(fontSizeBig, s_format("^x7F7F7FConsumes %s%d ^x7F7F7Fof %s%d ^x7F7F7FCharges on use",
+		local isRu = (itemLang ~= "EN")
+		local lastFmt = isRu and "^x7F7F7FДействует %s%.2f ^x7F7F7Fсекунды" or "^x7F7F7FLasts %s%.2f ^x7F7F7FSeconds"
+		tooltip:AddLine(fontSizeBig, s_format(lastFmt, main:StatColor(charmData.duration, base.charm.duration), charmData.duration), "FONTIN SC")
+		local charmChargeFmt = isRu and "^x7F7F7FТратит %s%d ^x7F7F7Fиз %s%d ^x7F7F7Fзарядов при использовании" or "^x7F7F7FConsumes %s%d ^x7F7F7Fof %s%d ^x7F7F7FCharges on use"
+		tooltip:AddLine(fontSizeBig, s_format(charmChargeFmt,
 			main:StatColor(charmData.chargesUsed, base.charm.chargesUsed), charmData.chargesUsed,
 			main:StatColor(charmData.chargesMax, base.charm.chargesMax), charmData.chargesMax
 		), "FONTIN SC")
 		for _, modLine in pairs(item.buffModLines) do
+			local buffLine = modLine.line
+			if isRu and ModTranslationsRU then
+				local ru = ModTranslationsRU:Translate(buffLine)
+				if ru and ru ~= buffLine then
+					buffLine = ru
+				end
+			end
 			if modLine.extra then
-				local line = colorCodes.UNSUPPORTED..modLine.line
-				line = (main.notSupportedModTooltips and not isCompact) and (line .. main.notSupportedTooltipText) or line
+				local notSupp = isRu and " (Пока не поддерживается в PoB)" or main.notSupportedTooltipText
+				local line = colorCodes.UNSUPPORTED..buffLine
+				line = (main.notSupportedModTooltips and not isCompact) and (line .. notSupp) or line
 				tooltip:AddLine(fontSizeBig, line, "FONTIN SC")
 			else
-				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..modLine.line, "FONTIN SC")
+				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..buffLine, "FONTIN SC")
 			end
 		end
 	elseif item.type == "Jewel" then
 		-- Jewel-specific info
+		local isRu = (itemLang ~= "EN")
 		if item.limit then
-			tooltip:AddLine(fontSizeBig, "^x7F7F7FLimited to: ^7"..item.limit, "FONTIN SC")
+			local limLabel = isRu and "^x7F7F7FОграничение: ^7" or "^x7F7F7FLimited to: ^7"
+			tooltip:AddLine(fontSizeBig, limLabel..item.limit, "FONTIN SC")
 		end
 		if item.classRestriction then
-			tooltip:AddLine(fontSizeBig, "^x7F7F7FRequires Class "..(self.build.spec.curClassName == item.classRestriction and colorCodes.POSITIVE or colorCodes.NEGATIVE)..item.classRestriction, "FONTIN SC")
+			local clsLabel = isRu and "^x7F7F7FТребуется класс " or "^x7F7F7FRequires Class "
+			local clsColor = (self.build.spec.curClassName == item.classRestriction and colorCodes.POSITIVE or colorCodes.NEGATIVE)
+			tooltip:AddLine(fontSizeBig, clsLabel..clsColor..item.classRestriction, "FONTIN SC")
 		end
 		if item.jewelRadiusLabel then
-			tooltip:AddLine(fontSizeBig, "^x7F7F7FRadius: ^7"..item.jewelRadiusLabel, "FONTIN SC")
+			local radiusMap = {
+				["Very Small"] = "Очень малый",
+				["Small"] = "Малый",
+				["Medium"] = "Средний",
+				["Large"] = "Большой",
+				["Very Large"] = "Очень большой",
+				["Massive"] = "Огромный",
+				["Variable"] = "Переменный",
+			}
+			local radVal = (isRu and radiusMap[item.jewelRadiusLabel]) or item.jewelRadiusLabel
+			local radLabel = isRu and "^x7F7F7FРадиус: ^7" or "^x7F7F7FRadius: ^7"
+			tooltip:AddLine(fontSizeBig, radLabel..radVal, "FONTIN SC")
 		end
 		if item.jewelRadiusData and slot and item.jewelRadiusData[slot.nodeId] then
 			local radiusData = item.jewelRadiusData[slot.nodeId]
 			local line
 			local codes = { colorCodes.STRENGTH, colorCodes.DEXTERITY, colorCodes.INTELLIGENCE }
+			local attrLabels = isRu and { "Силы", "Ловкости", "Интеллекта" } or { "Str", "Dex", "Int" }
 			for i, stat in ipairs({"Str","Dex","Int"}) do
 				if radiusData[stat] and radiusData[stat] ~= 0 then
-					line = (line and line .. ", " or "") .. s_format("%s%d %s^7", codes[i], radiusData[stat], stat)
+					line = (line and line .. ", " or "") .. s_format("%s%d %s^7", codes[i], radiusData[stat], attrLabels[i])
 				end
 			end
 			if line then
-				tooltip:AddLine(fontSizeBig, "^x7F7F7FAttributes in Radius: "..line, "FONTIN SC")
+				local attrHead = isRu and "^x7F7F7FХарактеристики в радиусе: " or "^x7F7F7FAttributes in Radius: "
+				tooltip:AddLine(fontSizeBig, attrHead..line, "FONTIN SC")
 			end
 		end
 	end
@@ -4122,7 +4208,8 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 			socketString = socketString .. "S "
 		end
 		socketString = socketString:gsub(" $", "")
-		tooltip:AddLine(fontSizeBig, "^x7F7F7FSockets: " .. socketString, "FONTIN SC")
+		local socketLabel = (itemLang ~= "EN") and "Гнёзда: " or "Sockets: "
+		tooltip:AddLine(fontSizeBig, "^x7F7F7F" .. socketLabel .. socketString, "FONTIN SC")
 	end
 	if item.jewelSocketCount > 0 then
 		local socketString = ""
@@ -4130,12 +4217,14 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 			socketString = socketString .. "J "
 		end
 		socketString = socketString:gsub(" $", "")
-		tooltip:AddLine(fontSizeBig, "^x7F7F7FSockets: " .. socketString, "FONTIN SC")
+		local socketLabel = (itemLang ~= "EN") and "Гнёзда: " or "Sockets: "
+		tooltip:AddLine(fontSizeBig, "^x7F7F7F" .. socketLabel .. socketString, "FONTIN SC")
 	end
 	tooltip:AddSeparator(sepGapDefault)
 
 	if item.talismanTier then
-		tooltip:AddLine(fontSizeBig, "^x7F7F7FTalisman Tier ^xFFFFFF"..item.talismanTier, "FONTIN SC")
+		local talLabel = (itemLang ~= "EN") and "^x7F7F7FУровень талисмана ^xFFFFFF" or "^x7F7F7FTalisman Tier ^xFFFFFF"
+		tooltip:AddLine(fontSizeBig, talLabel..item.talismanTier, "FONTIN SC")
 		tooltip:AddSeparator(sepGapDefault)
 	end
 
@@ -4153,7 +4242,7 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 		local node = self.build.spec.nodes[slot.nodeId]
 		if node and node.containJewelSocket then
 			local jewelEffect = node.modList:Sum("INC", nil, "SocketedJewelEffect")
-			extraTooltip = "^x7F7F7FSocketed Jewel Effect: "
+			extraTooltip = (itemLang ~= "EN") and "^x7F7F7FЭффект установленного самоцвета: " or "^x7F7F7FSocketed Jewel Effect: "
 			if jewelEffect > 0 then
 				extraTooltip = extraTooltip .. s_format(colorCodes.MAGIC.."+%d%%", jewelEffect)
 				tooltip:AddSeparator(sepGapDefault)
@@ -4206,12 +4295,20 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 							local displayed = false
 							if node.sd then
 								for _, stat in ipairs(node.sd) do
-									tooltip:AddLine(fontSizeBig, "^x7F7F7F"..stat, "FONTIN SC")
+									local dispStat = stat
+									if itemLang ~= "EN" and ModTranslationsRU then
+										local ru = ModTranslationsRU:Translate(stat)
+										if ru and ru ~= stat then
+											dispStat = ru
+										end
+									end
+									tooltip:AddLine(fontSizeBig, "^x7F7F7F"..dispStat, "FONTIN SC")
 									displayed = true
 								end
 							end
 							if not displayed and node.isJewelSocket then
-								tooltip:AddLine(fontSizeBig, "^x7F7F7F"..(node.name or "Jewel Socket"), "FONTIN SC")
+								local sockName = (itemLang ~= "EN" and (node.name == "Jewel Socket" or not node.name)) and "Гнездо для самоцвета" or (node.name or "Jewel Socket")
+								tooltip:AddLine(fontSizeBig, "^x7F7F7F"..sockName, "FONTIN SC")
 							end
 						end
 						-- Add separator only for anoints
@@ -4255,16 +4352,21 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 		if #item.explicitModLines == 0 then
 			tooltip:AddSeparator(sepGapDefault)
 		end
+		local isRu = (itemLang ~= "EN")
 		if item.mirrored then
-			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE.."Mirrored", "FONTIN SC")
+			local mirrText = isRu and "Отражено" or "Mirrored"
+			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE..mirrText, "FONTIN SC")
 		end
 		if item.sanctified then
-			tooltip:AddLine(fontSizeBig, colorCodes.FRACTURED.."Sanctified", "FONTIN SC")
+			local sancText = isRu and "Освящено" or "Sanctified"
+			tooltip:AddLine(fontSizeBig, colorCodes.FRACTURED..sancText, "FONTIN SC")
 		end
 		if item.doubleCorrupted then
-			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE.."Twice Corrupted", "FONTIN SC")
+			local twiceText = isRu and "Дважды осквернено" or "Twice Corrupted"
+			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE..twiceText, "FONTIN SC")
 		elseif item.corrupted then
-			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE.."Corrupted", "FONTIN SC")
+			local corrText = isRu and "Осквернено" or "Corrupted"
+			tooltip:AddLine(fontSizeBig, colorCodes.NEGATIVE..corrText, "FONTIN SC")
 		end
 		tooltip:AddSeparator(sepGapDefault)
 	end
@@ -4545,16 +4647,20 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 			effectInc = effectInc + modDB:Sum("INC", { actor = "player" }, "MagicCharmEffect")
 		end
 		local effectMod = (1 + (charmData.effectInc + effectInc) / 100) * (1 + (item.quality or 0) / 100)
+		local isRu = (itemLang ~= "EN")
 		if effectMod ~= 1 then
-			t_insert(stats, s_format("^8Charm effect modifier: ^7%+d%%", effectMod * 100 - 100))
+			local effLabel = isRu and "^8Модификатор эффекта оберега: ^7%+d%%" or "^8Charm effect modifier: ^7%+d%%"
+			t_insert(stats, s_format(effLabel, effectMod * 100 - 100))
 		end
 
 		if durInc ~= 0 then
-			t_insert(stats, s_format("^8Charm effect duration: ^7%.1f0s", charmData.duration * (1 + durInc / 100)))
+			local durLabel = isRu and "^8Длительность эффекта оберега: ^7%.1f0s" or "^8Charm effect duration: ^7%.1f0s"
+			t_insert(stats, s_format(durLabel, charmData.duration * (1 + durInc / 100)))
 		end
 
 		if stats[1] then
-			tooltip:AddLine(14, "^7Effective charm stats:")
+			local effHead = isRu and "^7Эффективные параметры оберега:" or "^7Effective charm stats:"
+			tooltip:AddLine(14, effHead)
 			for _, stat in ipairs(stats) do
 				tooltip:AddLine(14, stat)
 			end
@@ -4562,9 +4668,9 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 		local output = calcFunc({ [activationMode] = item })
 		local header
 		if self.build.calcsTab.mainEnv.charms[item] then
-			header = "^7Deactivating this charm will give you:"
+			header = isRu and "^7Деактивация этого оберега даст вам:" or "^7Deactivating this charm will give you:"
 		else
-			header = "^7Activating this charm will give you:"
+			header = isRu and "^7Активация этого оберега даст вам:" or "^7Activating this charm will give you:"
 		end
 		self.build:AddStatComparesToTooltip(tooltip, calcBase, output, header)
 	else
@@ -4637,24 +4743,49 @@ function ItemsTabClass:AddItemTooltip(tooltip, item, slot, dbMode, maxWidth, opt
 			compareSlots = { sideBySideSlot }
 		end
 
-		tooltip:AddLine(14, colorCodes.TIP .. "Tip: Press Ctrl+D"..itemTabHint.." to disable the display of stat differences.")
+		local isRu = (itemLang ~= "EN")
+		local tipText = isRu and (colorCodes.TIP .. "Подсказка: Нажмите Ctrl+D" .. (self.build.viewMode == "ITEMS" and "" or " на вкладке Предметы") .. " для скрытия разницы характеристик.") or (colorCodes.TIP .. "Tip: Press Ctrl+D"..itemTabHint.." to disable the display of stat differences.")
+		tooltip:AddLine(14, tipText)
 
 		local function getReplacedItemAndOutput(compareSlot)
 			local selItem = self.items[compareSlot.selItemId]
 			local output = calcFunc({ repSlotName = compareSlot.slotName, repItem = item ~= selItem and item or nil })
 			return selItem, output
 		end
+		local function ruSlotName(slotLabel)
+			local s = tostring(slotLabel or "")
+			local ruMap = {
+				["Weapon 1"] = "Оружие 1", ["Weapon 2"] = "Оружие 2",
+				["Helmet"] = "Шлем", ["Body Armour"] = "Доспех",
+				["Gloves"] = "Перчатки", ["Boots"] = "Обувь",
+				["Amulet"] = "Амулет", ["Ring 1"] = "Кольцо 1", ["Ring 2"] = "Кольцо 2", ["Ring 3"] = "Кольцо 3",
+				["Belt"] = "Пояс", ["Flask 1"] = "Флакон 1", ["Flask 2"] = "Флакон 2",
+				["Charm 1"] = "Оберег 1", ["Charm 2"] = "Оберег 2", ["Charm 3"] = "Оберег 3",
+				["Jewel"] = "Самоцвет", ["Jewel Socket"] = "Гнездо для самоцвета"
+			}
+			if ruMap[s] then return ruMap[s] end
+			local jNum = s:match("^Jewel (%d+)$")
+			if jNum then return "Самоцвет " .. jNum end
+			local jsNum = s:match("^Jewel Socket (%d+)$")
+			if jsNum then return "Гнездо для самоцвета " .. jsNum end
+			local pSlot, js = s:match("^(.-) Jewel Socket (%d+)$")
+			if pSlot and js then
+				return (ruMap[pSlot] or pSlot) .. " (Гнездо " .. js .. ")"
+			end
+			return s
+		end
 		local function addCompareForSlot(compareSlot, selItem, output)
 			if not selItem or not output then
 				selItem, output = getReplacedItemAndOutput(compareSlot)
 			end
 			local header
+			local slotDisp = isRu and ruSlotName(compareSlot.label or compareSlot.slotName) or (compareSlot.label or compareSlot.slotName)
 			if item == selItem then
-				header = "^7Removing this item from " .. compareSlot.label .. " will give you:"
+				header = isRu and ("^7Снятие этого предмета из " .. slotDisp .. " даст вам:") or ("^7Removing this item from " .. compareSlot.label .. " will give you:")
 			else
-				header = string.format("^7Equipping this item in %s will give you:%s",
-					compareSlot.label or compareSlot.slotName,
-					selItem and "\n(replacing " .. colorCodes[selItem.rarity] .. selItem.name .. "^7)" or "")
+				local replaceStr = selItem and ((isRu and "\n(заменяя " or "\n(replacing ") .. colorCodes[selItem.rarity] .. (isRu and (ItemNamesRU and ItemNamesRU:Get(selItem.name) or selItem.name) or selItem.name) .. "^7)") or ""
+				header = isRu and string.format("^7Установка этого предмета в %s даст вам:%s", slotDisp, replaceStr)
+					or string.format("^7Equipping this item in %s will give you:%s", slotDisp, replaceStr)
 			end
 			self.build:AddStatComparesToTooltip(tooltip, calcBase, output, header)
 		end

@@ -9,6 +9,19 @@ local t_insert = table.insert
 local s_format = string.format
 
 local scopes = { }
+local StatDescriptionsRU
+local statDescRuLoaded = false
+
+local function getStatDescriptionsRU()
+	if not statDescRuLoaded then
+		statDescRuLoaded = true
+		local ok, mod = pcall(LoadModule, "Data/StatDescriptionsRU")
+		if ok and mod then
+			StatDescriptionsRU = mod
+		end
+	end
+	return StatDescriptionsRU
+end
 
 local function getScope(scopeName)
 	if not scopes[scopeName] then
@@ -43,7 +56,10 @@ local function matchLimit(lang, val, quality)
 		if quality or not desc.gem_quality then -- Skip gem_quality lines for regular mods
 			local match = true
 			for i, limit in ipairs(desc.limit) do
-				if limit[1] == "!" then
+				if not val[i] then
+					match = false
+					break
+				elseif limit[1] == "!" then
 					if val[i].min == limit[2] then
 						match = false
 						break
@@ -275,6 +291,17 @@ return function(stats, scopeName, quality)
 		end
 		local desc = matchLimit(descriptor.description[1], val, quality)
 		if desc then
+			local itemLang = (main and main.itemLanguage) or "DUAL"
+			if itemLang ~= "EN" then
+				local sru = getStatDescriptionsRU()
+				local ruLang = sru and sru:Get(scopeName, descriptor.description.stats)
+				if ruLang then
+					local ruDesc = matchLimit(ruLang, val, quality)
+					if ruDesc and ruDesc.text ~= "" then
+						desc = ruDesc
+					end
+				end
+			end
 			for _, spec in ipairs(desc) do
 				applySpecial(val, spec)
 			end

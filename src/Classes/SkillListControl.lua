@@ -6,6 +6,7 @@
 local ipairs = ipairs
 local t_insert = table.insert
 local t_remove = table.remove
+local GemNamesRU = LoadModule("Data/GemNamesRU")
 local slot_map = {
 	["Weapon 1"] 		= { icon = NewImageHandle(), path = "Assets/icon_weapon.png" },
 	["Weapon 2"] 		= { icon = NewImageHandle(), path = "Assets/icon_weapon_2.png" },
@@ -28,6 +29,23 @@ local slot_map = {
 
 ---@class SkillListControl: ListControl
 local SkillListClass = newClass("SkillListControl", "ListControl")
+
+--- Localises a socket group display label (comma-separated gem names) for drawing.
+local function localizeDisplayLabel(label)
+	if not label or label == "?" or (main and main.itemLanguage == "EN") then
+		return label
+	end
+	local parts = { }
+	for part in label:gmatch("[^,]+") do
+		local trimmed = part:match("^%s*(.-)%s*$")
+		local ru = GemNamesRU and GemNamesRU:Get(trimmed) or nil
+		if type(ru) == "string" and ru ~= "" then
+			trimmed = ru
+		end
+		parts[#parts + 1] = trimmed
+	end
+	return table.concat(parts, ", ")
+end
 
 ---@param anchor Anchor?
 ---@param rect Rect?
@@ -77,19 +95,20 @@ end
 
 function SkillListClass:GetRowValue(column, index, socketGroup)
 	if column == 1 then
-		local label = socketGroup.displayLabel or "?"
+		local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+		local label = localizeDisplayLabel(socketGroup.displayLabel) or "?"
 		local currentMainSkill = self.skillsTab.build.mainSocketGroup == index
 		local disabled = not socketGroup.enabled
 		if disabled then
 			local colour = currentMainSkill and "" or "^x7F7F7F"
-			label = colour .. label .. " (Disabled)"
+			label = colour .. label .. (isUiRu and " (Откл.)" or " (Disabled)")
 		end
 		if currentMainSkill then 
-			local activeLabel = disabled and " (Forced Active)" or " (Active)"
+			local activeLabel = disabled and (isUiRu and " (Принуд. активно)" or " (Forced Active)") or (isUiRu and " (Активно)" or " (Active)")
 			label = label .. colorCodes.RELIC .. activeLabel
 		end
 		if socketGroup.includeInFullDPS then 
-			label = label .. colorCodes.CUSTOM .. " (FullDPS)"
+			label = label .. colorCodes.CUSTOM .. (isUiRu and " (Полн.DPS)" or " (FullDPS)")
 		end
 		return label
 	end

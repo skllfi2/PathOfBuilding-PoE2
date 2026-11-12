@@ -19,6 +19,8 @@ local unseenPathHover = false
 
 local gemTooltip = LoadModule("Classes/GemTooltip")
 local TreeNodesRU = LoadModule("Data/TreeNodesRU")
+local RULogger = LoadModule("Modules/RULogger")
+local TreePassivesRU_ok, TreePassivesRU = pcall(LoadModule, "Data/TreePassivesRU")
 local utf8 = require('lua-utf8')
 local function toLowerStr(s)
 	if not s then return "" end
@@ -1542,6 +1544,7 @@ function PassiveTreeViewClass:DoesNodeMatchSearchParams(build, node)
 
 	local needMatches = copyTable(self.searchParams)
 	local err
+	local itemLang = (main and main.itemLanguage) or "DUAL"
 
 	local function search(haystack, need)
 		for i=#need, 1, -1 do
@@ -1609,6 +1612,20 @@ function PassiveTreeViewClass:DoesNodeMatchSearchParams(build, node)
 		end
 	end
 
+	-- Check node description (RU stat lines from TreePassivesRU)
+	if itemLang ~= "EN" and TreePassivesRU_ok and TreePassivesRU then
+		local ruStats = TreePassivesRU:GetStats(node)
+		if ruStats then
+			for _, ruLine in ipairs(ruStats) do
+				err, needMatches = PCall(search, toLowerStr(ruLine), needMatches)
+				if err then return false end
+				if #needMatches == 0 then
+					return true
+				end
+			end
+		end
+	end
+
 	-- Check node type
 	err, needMatches = PCall(search, node.type:lower(), needMatches)
 	if err then return false end
@@ -1668,9 +1685,13 @@ function PassiveTreeViewClass:AddNodeName(tooltip, node, build)
 	elseif itemLang == "DUAL" and ruName and ruName ~= node.dn then
 		-- Dual mode: Russian name on top, English original beneath in grey ^8
 		tooltip:AddLine(22, colorPrefix .. ruName, "FONTIN")
-		tooltip:AddLine(16, "^8" .. node.dn, "FONTIN SC")
+		tooltip:AddLine(16, "^8(" .. node.dn .. ")", "FONTIN SC")
 	else
 		tooltip:AddLine(24, colorPrefix .. node.dn, "FONTIN")
+		-- Log untranslated node name (source: "TREE")
+		if RULogger and main and main.logUntranslatedRU then
+			RULogger.Log("TREE", node.dn)
+		end
 	end
 	tooltip.center = false
 	if launch.devModeAlt and node.id > 65535 then
@@ -1834,12 +1855,56 @@ function PassiveTreeViewClass:AddNodeTooltip(tooltip, node, build, incSmallPassi
 				-- line = line .. "  ^8(Effect increased by "..incSmallPassiveSkillEffect.."%)"
 			end
 
-			if line ~= " " and (node.mods[i].extra or not node.mods[i].list) then
-				local line = colorCodes.UNSUPPORTED..line
-				line = main.notSupportedModTooltips and (line .. main.notSupportedTooltipText) or line
-				tooltip:AddLine(fontSizeBig, line, "FONTIN SC")
-			else
-				tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..line, "FONTIN SC")
+			local itemLang = (main and main.itemLanguage) or "DUAL"
+			local displayLine = line
+			local extraRuLines
+			if itemLang ~= "EN" and not launch.devModeAlt then
+				local ModTranslationsRU = LoadModule("Data/ModTranslationsRU")
+				if ModTranslationsRU then
+					local ruLine = ModTranslationsRU:Translate(line)
+					if ruLine and ruLine ~= line then
+						displayLine = ruLine
+					elseif TreePassivesRU_ok and TreePassivesRU and (incSmallPassiveSkillEffect + (localIncEffect or 0)) == 0 then
+						-- Fallback to official RU stats from TreePassivesRU (even when line counts differ due to EN wrapping)
+						local ruStats = TreePassivesRU:GetStats(node)
+						if ruStats and #ruStats > 0 then
+							if i <= #ruStats then
+								displayLine = ruStats[i]
+								if i == #node.sd and #ruStats > #node.sd then
+									extraRuLines = {}
+									for k = #node.sd + 1, #ruStats do
+										extraRuLines[#extraRuLines + 1] = ruStats[k]
+									end
+								end
+							else
+								return
+							end
+						end
+					end
+				end
+			end
+
+			-- Log untranslated tree mod line (source: "TREE")
+			if RULogger and main and main.logUntranslatedRU and itemLang ~= "EN" and not launch.devModeAlt then
+				if displayLine == line then
+					RULogger.Log("TREE", line)
+				end
+			end
+
+			local function emitTooltipLine(txt)
+				if line ~= " " and (node.mods[i].extra or not node.mods[i].list) then
+					local unsupportedLine = colorCodes.UNSUPPORTED..txt
+					unsupportedLine = main.notSupportedModTooltips and (unsupportedLine .. main.notSupportedTooltipText) or unsupportedLine
+					tooltip:AddLine(fontSizeBig, unsupportedLine, "FONTIN SC")
+				else
+					tooltip:AddLine(fontSizeBig, colorCodes.MAGIC..txt, "FONTIN SC")
+				end
+			end
+			emitTooltipLine(displayLine)
+			if extraRuLines then
+				for _, ex in ipairs(extraRuLines) do
+					emitTooltipLine(ex)
+				end
 			end
 		end
 	end
@@ -1986,9 +2051,18 @@ function PassiveTreeViewClass:AddNodeTooltip(tooltip, node, build, incSmallPassi
 	end
 
 	-- Flavour text
-	if node.flavourText and main.showFlavourText then
-		tooltip:AddSeparator(14)
-		tooltip:AddLine(fontSizeBig, colorCodes.UNIQUE..node.flavourText, "FONTIN ITALIC")
+	if main.showFlavourText then
+		local flavourText = node.flavourText
+		if itemLang ~= "EN" and TreePassivesRU_ok and TreePassivesRU then
+			local ruFlavour = TreePassivesRU:GetFlavour(node)
+			if ruFlavour then
+				flavourText = ruFlavour
+			end
+		end
+		if flavourText then
+			tooltip:AddSeparator(14)
+			tooltip:AddLine(fontSizeBig, colorCodes.UNIQUE..flavourText, "FONTIN ITALIC")
+		end
 	end
 
 	-- Mod differences

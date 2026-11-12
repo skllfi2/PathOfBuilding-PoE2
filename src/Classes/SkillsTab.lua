@@ -10,6 +10,9 @@ local t_remove = table.remove
 local m_min = math.min
 local m_max = math.max
 
+local okGemRU, GemNamesRU = pcall(LoadModule, "Data/GemNamesRU")
+if not okGemRU then GemNamesRU = nil end
+
 local defaultGemLevelList = {
 	{
 		label = "Normal Maximum",
@@ -109,7 +112,7 @@ function SkillsTabClass:SkillsTab(build)
 
 	-- Gem options
 	local optionInputsX = 170
-	local optionInputsY = 45
+	local optionInputsY = 64
 	self.controls.optionSection = new("SectionControl"):SectionControl({ "TOPLEFT", self.controls.groupList, "BOTTOMLEFT" }, { 0, optionInputsY + 50, 360, 150 }, "Gem Options")
 	self.controls.sortGemsByDPS = new("CheckBoxControl"):CheckBoxControl({ "TOPLEFT", self.controls.groupList, "BOTTOMLEFT" }, { optionInputsX, optionInputsY + 70, 20 }, "Sort gems by DPS:", function(state)
 		self.sortGemsByDPS = state
@@ -217,7 +220,7 @@ function SkillsTabClass:SkillsTab(build)
 			end
 		end
 	end
-	self.controls.includeInFullDPS = new("CheckBoxControl"):CheckBoxControl({ "LEFT", self.controls.groupEnabled, "RIGHT" }, { 145, 0, 20 }, "Include in Full DPS:", function(state)
+	self.controls.includeInFullDPS = new("CheckBoxControl"):CheckBoxControl({ "LEFT", self.controls.groupEnabled, "RIGHT" }, { 165, 0, 20 }, "Include in Full DPS:", function(state)
 		self.displayGroup.includeInFullDPS = state
 		self:AddUndoState()
 		self.build.buildFlag = true
@@ -1596,9 +1599,11 @@ function SkillsTabClass:AddSocketGroupTooltip(tooltip, socketGroup)
 		end
 		tooltip:AddLine(16, "^7Active Skill #"..index..":")
 		for _, skillEffect in ipairs(activeSkill.effectList) do
+			local rawName = skillEffect.srcInstance.nameSpec or skillEffect.grantedEffect.name
+			local dispName = (main and main.itemLanguage ~= "EN" and GemNamesRU and GemNamesRU:Get(rawName)) or rawName
 			tooltip:AddLine(20, string.format("%s%s ^7%d%s/%d%s%s",
 				data.skillColorMap[skillEffect.grantedEffect.color or skillEffect.gemData and skillEffect.gemData.grantedEffect.color],
-				skillEffect.srcInstance.nameSpec or skillEffect.grantedEffect.name,
+				dispName,
 				skillEffect.srcInstance and skillEffect.srcInstance.level or skillEffect.level,
 				(skillEffect.srcInstance and skillEffect.level > skillEffect.srcInstance.level) and colorCodes.MAGIC.."+"..(skillEffect.level - skillEffect.srcInstance.level).."^7" or "",
 				skillEffect.srcInstance and skillEffect.srcInstance.quality or skillEffect.quality,
@@ -1613,9 +1618,11 @@ function SkillsTabClass:AddSocketGroupTooltip(tooltip, socketGroup)
 			tooltip:AddSeparator(10)
 			tooltip:AddLine(16, "^7Active Skill #" .. index .. "'s Main Minion Skill:")
 			local activeEffect = activeSkill.minion.mainSkill.effectList[1]
+			local rawMinionName = activeEffect.grantedEffect.name
+			local dispMinionName = (main and main.itemLanguage ~= "EN" and GemNamesRU and GemNamesRU:Get(rawMinionName)) or rawMinionName
 			tooltip:AddLine(20, string.format("%s%s ^7%d/%d",
 				data.skillColorMap[activeEffect.grantedEffect.color] or colorCodes.NORMAL,
-				activeEffect.grantedEffect.name,
+				dispMinionName,
 				activeEffect.level,
 				activeEffect.quality
 			))

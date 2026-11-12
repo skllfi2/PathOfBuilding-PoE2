@@ -123,7 +123,10 @@ function ItemSlotClass:Populate()
 	for _, item in pairs(self.itemsTab.items) do
 		if self.itemsTab:IsItemValidForSlot(item, self.slotName) then
 			t_insert(self.items, item.id)
-			t_insert(self.list, colorCodes[item.rarity]..item.name)
+			local isRu = (main and main.itemLanguage) ~= "EN"
+			local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+			local displayName = isRu and (ItemNamesRU and ItemNamesRU:Get(item.name) or item.name) or item.name
+			t_insert(self.list, colorCodes[item.rarity]..displayName)
 			if item.id == self.selItemId then
 				self.selIndex = #self.list
 			end
@@ -168,7 +171,12 @@ end
 function ItemSlotClass:Draw(viewPort)
 	local x, y = self:GetPos()
 	local width, height = self:GetSize()
-	DrawString(x + self.labelOffset, y + 2, "RIGHT_X", height - 4, "VAR", "^7"..self.label..":")
+	local slotLabel = self.label
+	local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+	if UITranslationsRU and isUiRu then
+		slotLabel = UITranslationsRU:Get(slotLabel) or slotLabel
+	end
+	DrawString(x + self.labelOffset, y + 2, "RIGHT_X", height - 4, "VAR", "^7"..slotLabel..":")
 	self.DropDownControl:Draw(viewPort)
 	self:DrawControls(viewPort)
 	if not main.popups[1] and self.nodeId and (self.dropped or (self:IsMouseOver() and (self.otherDragSource or not self.itemsTab.selControl))) then

@@ -14,6 +14,7 @@ local s_format = string.format
 local s_gmatch = string.gmatch
 
 local ItemComparison = LoadModule("Modules/ItemComparison")
+local RULogger = LoadModule("Modules/RULogger")
 
 -- Constants
 
@@ -167,10 +168,12 @@ function TooltipClass:CheckForUpdate(...)
 		or self.updateParams.notSupportedModTooltips ~= main.notSupportedModTooltips
 		or self.updateParams.sideBySideItemComparison ~= main.sideBySideItemComparison
 		or self.updateParams.compactTooltips ~= main.compactTooltips
+		or self.updateParams.uiLanguage ~= main.uiLanguage
 		or self.updateParams.itemLanguage ~= main.itemLanguage then
 		self.updateParams.notSupportedModTooltips = main.notSupportedModTooltips
 		self.updateParams.sideBySideItemComparison = main.sideBySideItemComparison
 		self.updateParams.compactTooltips = main.compactTooltips
+		self.updateParams.uiLanguage = main.uiLanguage
 		self.updateParams.itemLanguage = main.itemLanguage
 		self:Clear()
 		return true
@@ -187,13 +190,25 @@ function TooltipClass:AddLine(size, text, font, background, modLine)
 		end
 		local activeColour
 		for line in s_gmatch(text .. "\n", "([^\n]*)\n") do
+			local origLine = line
+			local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+			if UITranslationsRU and isUiRu then
+				local tr = UITranslationsRU:Get(line)
+				if tr and tr ~= "" then
+					line = tr
+				end
+			end
+			-- Log untranslated tooltip lines (source: "TOOLTIP")
+			if RULogger and main and main.logUntranslatedRU and line == origLine and origLine ~= "" then
+				RULogger.Log("TOOLTIP", origLine)
+			end
 			if line:match("^.*(Equipping)") == "Equipping" or line:match("^.*(Removing)") == "Removing" then
 				t_insert(self.blocks, { height = size + 2})
 			else
 				self.blocks[#self.blocks].height = self.blocks[#self.blocks].height + size + 2
 			end
 			if self.maxWidth then
-				for _, wrappedLine in ipairs(main:WrapString(line, size, self.maxWidth - H_PAD)) do
+				for _, wrappedLine in ipairs(main:WrapString(line, size, self.maxWidth - H_PAD - 4, fontToUse)) do
 					if activeColour then wrappedLine = activeColour .. wrappedLine end
 					for pos, code in s_gmatch(wrappedLine, "()%^(.)") do
 						if code == "x" and wrappedLine:sub(pos + 2, pos + 7):match("^%x%x%x%x%x%x$") then
@@ -467,6 +482,9 @@ function TooltipClass:CalculateColumns(ttY, ttX, ttH, ttW, viewPort)
 				local rn = r.name
 				if #rn > 3 and rn:sub(-3) == "Oil" then
 					rn = rn:sub(1, #rn - 3)
+				end
+				if UITranslationsRU and (not main or main.itemLanguage ~= "EN") then
+					rn = UITranslationsRU:Get(rn)
 				end
 				local textW = DrawStringWidth(recipeTextSize, font, rn)
 				local iconW = titleSize

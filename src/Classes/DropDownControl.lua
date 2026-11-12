@@ -19,10 +19,11 @@ end
 ---@class DropDownControl: Control, ControlHost, TooltipHost, SearchHost
 local DropDownClass = newClass("DropDownControl", "Control", "ControlHost", "TooltipHost", "SearchHost")
 
-function DropDownClass:DropDownControl(anchor, rect, list, selFunc, tooltipText, ignoreSearchOrder)
+function DropDownClass:DropDownControl(anchor, rect, list, selFunc, tooltipText, ignoreSearchOrder, labelFunc)
 	self:Control(anchor, rect)
 	self:ControlHost()
 	self:TooltipHost(tooltipText)
+	self.labelFunc = labelFunc
 	self:SearchHost(
 			-- list to filter
 			function()
@@ -30,15 +31,19 @@ function DropDownClass:DropDownControl(anchor, rect, list, selFunc, tooltipText,
 			end,
 			-- value mapping function
 			function(listVal)
+				local s
 				if type(listVal) == "table" then
 					if listVal.searchFilter then
-						return StripEscapes(listVal.searchFilter)
-					end
-					if listVal.label then
-						return StripEscapes(listVal.label)
+						s = listVal.searchFilter
+					elseif listVal.label then
+						s = listVal.label
 					end
 				end
-				return StripEscapes(listVal)
+				s = s or listVal
+				if self.labelFunc and s then
+					s = self.labelFunc(s)
+				end
+				return StripEscapes(s)
 		end,
 		ignoreSearchOrder
 	)
@@ -368,6 +373,31 @@ function DropDownClass:Draw(viewPort, noTooltip)
 		else
 			selLabel = selItem
 		end
+		if self.labelFunc and selLabel then
+			selLabel = self.labelFunc(selLabel)
+		elseif selLabel then
+			local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+			local isItemRu = (main and main.itemLanguage) ~= "EN"
+			local res = (isUiRu and UITranslationsRU and UITranslationsRU:Get(selLabel)) or selLabel
+			if res == selLabel and isItemRu then
+				local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+				if ItemNamesRU then
+					local colorPrefix, coreName = selLabel:match("^(%^%d)(.*)$")
+					if not colorPrefix then
+						colorPrefix, coreName = selLabel:match("^(%^x%x%x%x%x%x%x)(.*)$")
+					end
+					if not colorPrefix then
+						colorPrefix = ""
+						coreName = selLabel
+					end
+					local tr = ItemNamesRU:Get(coreName)
+					if tr and tr ~= coreName then
+						res = colorPrefix .. tr
+					end
+				end
+			end
+			selLabel = res
+		end
 	end
 	SetViewport(x + 2, y + 2, width - height, lineHeight)
 	DrawString(0, 0, "LEFT", lineHeight, "VAR", selLabel or "")
@@ -448,6 +478,31 @@ function DropDownClass:Draw(viewPort, noTooltip)
 					detail = listVal.detail
 				else 
 					label = listVal
+				end
+				if self.labelFunc and label then
+					label = self.labelFunc(label)
+				elseif label then
+					local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+					local isItemRu = (main and main.itemLanguage) ~= "EN"
+					local res = (isUiRu and UITranslationsRU and UITranslationsRU:Get(label)) or label
+					if res == label and isItemRu then
+						local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+						if ItemNamesRU then
+							local colorPrefix, coreName = label:match("^(%^%d)(.*)$")
+							if not colorPrefix then
+								colorPrefix, coreName = label:match("^(%^x%x%x%x%x%x%x)(.*)$")
+							end
+							if not colorPrefix then
+								colorPrefix = ""
+								coreName = label
+							end
+							local tr = ItemNamesRU:Get(coreName)
+							if tr and tr ~= coreName then
+								res = colorPrefix .. tr
+							end
+						end
+					end
+					label = res
 				end
 				DrawString(0, y, "LEFT", lineHeight, "VAR", label)
 				if type(listVal) == "table" and listVal.strikethrough then

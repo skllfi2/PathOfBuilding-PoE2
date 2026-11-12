@@ -249,17 +249,21 @@ function ItemListClass:GetRowValue(column, index, itemId)
 	local item = self.itemsTab.items[itemId]
 	if column == 1 then
 		local used = self:FindEquippedItemSocket(itemId, true) or self:FindSocketedJewel(itemId, true) or ""
+		local isUiRu = not (main and (main.uiLanguage == "EN" or (not main.uiLanguage and main.itemLanguage == "EN")))
+		local isItemRu = (main and main.itemLanguage) ~= "EN"
 		if used == "" then
 			local slot, itemSet = self.itemsTab:GetEquippedSlotForItem(item)
 			if not slot then
-				used = "  ^9(Unused)"
+				used = isUiRu and "  ^9(Не используется)" or "  ^9(Unused)"
 			elseif itemSet then
-				used = "  ^9(Used in '" .. (itemSet.title or "Default") .. "')"
+				used = isUiRu and ("  ^9(В наборе '" .. (itemSet.title or "По умолчанию") .. "')") or ("  ^9(Used in '" .. (itemSet.title or "Default") .. "')")
 			end
 		else
-			used = "  ^9(Used in '" .. used .. "')"
+			used = isUiRu and ("  ^9(В наборе '" .. used .. "')") or ("  ^9(Used in '" .. used .. "')")
 		end
-		return colorCodes[item.rarity] .. item.name .. used
+		local ItemNamesRU = LoadModule("Data/ItemNamesRU")
+		local name = isItemRu and (ItemNamesRU and ItemNamesRU:Get(item.name) or item.name) or item.name
+		return colorCodes[item.rarity] .. name .. used
 	end
 end
 
