@@ -1,6 +1,9 @@
 # PoB2Fork — Current State
 
 Дата зафиксированного состояния: 2026-11-12.
+- **D-051 (2026-11-12): Успешное кросс-портирование на Path of Building (PoE1) и синхронизация документации:**
+  - На базе наработок PoE2 выполнено портирование на PoE1 (ветка `ru-localization`, 15 коммитов): ядро локализации, темизация Fluent UI 8 контролов, 6 контентных словарей PoE1 (`ItemNamesRU`, `GemNamesRU`, `TreeNodesRU`, `SkillDescriptionsRU`, `ModTranslationsRU`, `TreePassivesRU`), Side-by-Side сравнение предметов, скролл настроек `Options`, 100% покрытие дерева пассивок (1746/1746) и Мастерств (133 группы), фикс сохранения цветов перенесённых строк в `Tooltip.lua` и GitHub Actions CI для сборки релизов.
+  - Синхронизированы `POE1_PORTING_PLAYBOOK.md` и спецификации ТЗ 01–13 в `docs-internal/`.
 - **D-050 (2026-11-12): Тултипы, фикс `WrapString`, `CalcBreakdownRU`, `ConfigTooltipsRU` и автоматизация аудита:**
   - **Main.lua & Tooltip.lua:** `main:WrapString` теперь переносит до переполняющего слова и учитывает шрифт `fontToUse` (`self.maxWidth - H_PAD - 4`), устранив выход текста за границы 450 px карточек Side-by-Side; в `Options` добавлен чекбокс `logUntranslatedRU`.
   - **UITranslationsRU.lua:** исправлен multiline `gmatch` (убрано наложение в `PartyTab`), добавлены 45+ тултипов `Options`/вкладок, предупреждения `BuildDisplayStats`, `Active Skill #N`, `Скор. передв. навыка`.
